@@ -1,0 +1,29 @@
+# Gradle
+.gradle/
+build/
+local.properties
+*.hprof
+
+# Android
+*.iml
+*.apk
+*.ap_
+*.dex
+
+# IntelliJ / Android Studio
+.idea/
+*.iws
+*.ipr
+captures/
+
+# Kotlin
+*.class
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Keys / secrets
+keystore.properties
+*.jks
+*.keystore
