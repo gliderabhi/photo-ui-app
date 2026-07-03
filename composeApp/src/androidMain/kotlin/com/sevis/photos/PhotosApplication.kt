@@ -3,7 +3,7 @@ package com.sevis.photos
 import android.app.Application
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
-import coil3.network.ktor3.KtorNetworkFetcherFactory
+import coil3.network.ktor2.KtorNetworkFetcherFactory
 import io.ktor.client.*
 import io.ktor.client.engine.android.*
 import io.ktor.client.plugins.api.*
