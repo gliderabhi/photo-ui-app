@@ -13,7 +13,56 @@ data class MediaImage(
     val dateAdded: Long
 )
 
+data class MediaVideo(
+    val id: Long,
+    val uri: Uri,
+    val name: String,
+    val mimeType: String,
+    val dateAdded: Long
+)
+
 object MediaStoreHelper {
+
+    fun getVideosSince(context: Context, sinceEpochSeconds: Long): List<MediaVideo> {
+        val results = mutableListOf<MediaVideo>()
+        val projection = arrayOf(
+            MediaStore.Video.Media._ID,
+            MediaStore.Video.Media.DISPLAY_NAME,
+            MediaStore.Video.Media.MIME_TYPE,
+            MediaStore.Video.Media.DATE_ADDED
+        )
+        val selection = "${MediaStore.Video.Media.DATE_ADDED} > ?"
+        val selectionArgs = arrayOf(sinceEpochSeconds.toString())
+        val sortOrder = "${MediaStore.Video.Media.DATE_ADDED} ASC"
+
+        context.contentResolver.query(
+            MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+            projection,
+            selection,
+            selectionArgs,
+            sortOrder
+        )?.use { cursor ->
+            val idCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media._ID)
+            val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DISPLAY_NAME)
+            val mimeCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.MIME_TYPE)
+            val dateCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_ADDED)
+
+            while (cursor.moveToNext()) {
+                val id = cursor.getLong(idCol)
+                val uri = Uri.withAppendedPath(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, id.toString())
+                results.add(
+                    MediaVideo(
+                        id = id,
+                        uri = uri,
+                        name = cursor.getString(nameCol) ?: "video_$id.mp4",
+                        mimeType = cursor.getString(mimeCol) ?: "video/mp4",
+                        dateAdded = cursor.getLong(dateCol)
+                    )
+                )
+            }
+        }
+        return results
+    }
 
     fun getImagesSince(context: Context, sinceEpochSeconds: Long): List<MediaImage> {
         val results = mutableListOf<MediaImage>()

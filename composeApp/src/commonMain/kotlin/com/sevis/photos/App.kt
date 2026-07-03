@@ -30,11 +30,17 @@ fun App(
     onFolderPasswordChange: (String?) -> Unit,
     onFavoritesChange: (Set<Int>) -> Unit,
     pickedImages: List<ImageFile>,
-    onPickImages: () -> Unit,
-    onClearPickedImages: () -> Unit,
+    pickedVideos: List<VideoFile>,
+    onPickMedia: () -> Unit,
+    onClearPickedMedia: () -> Unit,
     uploadImage: suspend (ImageFile) -> Result<PhotoResponse>,
+    videoApi: VideoApi,
+    uploadVideo: suspend (VideoFile) -> Result<VideoResponse>,
+    onPlayVideo: (String) -> Unit,
     autoUploadEnabled: Boolean,
-    onAutoUploadToggle: (Boolean) -> Unit
+    onAutoUploadToggle: (Boolean) -> Unit,
+    appDownloadUrl: String,
+    onOpenUrl: (String) -> Unit
 ) {
     MaterialTheme {
         val navController = rememberNavController()
@@ -95,9 +101,13 @@ fun App(
                     api = api,
                     baseUrl = baseUrl,
                     pickedImages = pickedImages,
-                    onPickImages = onPickImages,
-                    onClearPickedImages = onClearPickedImages,
+                    pickedVideos = pickedVideos,
+                    onPickMedia = onPickMedia,
+                    onClearPickedMedia = onClearPickedMedia,
                     uploadImage = uploadImage,
+                    videoApi = videoApi,
+                    uploadVideo = uploadVideo,
+                    onPlayVideo = onPlayVideo,
                     autoUploadEnabled = autoUploadEnabled,
                     onAutoUploadToggle = onAutoUploadToggle,
                     onFavoritesChange = onFavoritesChange,
@@ -116,7 +126,9 @@ fun App(
                         navController.navigate(Routes.FOLDER_UNLOCK) {
                             popUpTo(Routes.SHELL) { inclusive = true }
                         }
-                    }
+                    },
+                    appDownloadUrl = appDownloadUrl,
+                    onOpenUrl = onOpenUrl
                 )
             }
         }

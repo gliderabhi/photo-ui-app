@@ -26,31 +26,56 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.sevis.photos.data.ImageFile
 import com.sevis.photos.data.PhotoResponse
-import com.sevis.photos.data.UploadItem
 import com.sevis.photos.data.UploadStatus
+import com.sevis.photos.data.VideoFile
+import com.sevis.photos.data.VideoResponse
 import kotlinx.coroutines.launch
+
+/** Kind-tagged so one queue/grid can hold both photo and video picks, mirroring
+ *  the web app's unified upload page. `uri` doubles as the item's stable key. */
+private sealed class MediaUploadItem {
+    abstract val uri: String
+    abstract val name: String
+    abstract val status: UploadStatus
+    abstract val errorMsg: String?
+
+    abstract fun withStatus(status: UploadStatus, errorMsg: String? = null): MediaUploadItem
+
+    data class Photo(val file: ImageFile, override val status: UploadStatus = UploadStatus.PENDING, override val errorMsg: String? = null) : MediaUploadItem() {
+        override val uri get() = file.uri
+        override val name get() = file.name
+        override fun withStatus(status: UploadStatus, errorMsg: String?) = copy(status = status, errorMsg = errorMsg)
+    }
+
+    data class Video(val file: VideoFile, override val status: UploadStatus = UploadStatus.PENDING, override val errorMsg: String? = null) : MediaUploadItem() {
+        override val uri get() = file.uri
+        override val name get() = file.name
+        override fun withStatus(status: UploadStatus, errorMsg: String?) = copy(status = status, errorMsg = errorMsg)
+    }
+}
 
 @Composable
 fun UploadScreen(
     pickedImages: List<ImageFile>,
-    onPickImages: () -> Unit,
-    onClearPickedImages: () -> Unit,
+    pickedVideos: List<VideoFile>,
+    onPickMedia: () -> Unit,
+    onClearPickedMedia: () -> Unit,
     uploadImage: suspend (ImageFile) -> Result<PhotoResponse>,
+    uploadVideo: suspend (VideoFile) -> Result<VideoResponse>,
     autoUploadEnabled: Boolean,
     onAutoUploadToggle: (Boolean) -> Unit
 ) {
     val scope = rememberCoroutineScope()
-    var queue by remember { mutableStateOf<List<UploadItem>>(emptyList()) }
+    var queue by remember { mutableStateOf<List<MediaUploadItem>>(emptyList()) }
     var uploading by remember { mutableStateOf(false) }
 
-    // Sync picked images into queue
-    LaunchedEffect(pickedImages) {
-        if (pickedImages.isNotEmpty()) {
-            val existing = queue.map { it.file.uri }.toSet()
-            val newItems = pickedImages
-                .filter { !existing.contains(it.uri) }
-                .map { UploadItem(file = it) }
-            queue = queue + newItems
+    // Sync picked photos + videos into one queue
+    LaunchedEffect(pickedImages, pickedVideos) {
+        if (pickedImages.isNotEmpty() || pickedVideos.isNotEmpty()) {
+            val existing = queue.map { it.uri }.toSet()
+            val newPhotoItems = pickedImages.filter { !existing.contains(it.uri) }.map { MediaUploadItem.Photo(file = it) }
+            val newVideoItems = pickedVideos.filter { !existing.contains(it.uri) }.map { MediaUploadItem.Video(file = it) }
+            queue = queue + newPhotoItems + newVideoItems
         }
     }
 
@@ -63,19 +88,19 @@ fun UploadScreen(
         val pending = queue.filter { it.status == UploadStatus.PENDING }
         if (pending.isEmpty()) { uploading = false; return }
         var finished = 0
+        fun updateItem(uri: String, status: UploadStatus, errorMsg: String? = null) {
+            queue = queue.map { if (it.uri == uri) it.withStatus(status, errorMsg) else it }
+        }
         pending.forEach { item ->
-            queue = queue.map { if (it.file.uri == item.file.uri) it.copy(status = UploadStatus.UPLOADING) else it }
+            updateItem(item.uri, UploadStatus.UPLOADING)
             scope.launch {
-                uploadImage(item.file)
-                    .onSuccess {
-                        queue = queue.map { if (it.file.uri == item.file.uri) it.copy(status = UploadStatus.DONE) else it }
-                    }
-                    .onFailure { e ->
-                        queue = queue.map {
-                            if (it.file.uri == item.file.uri) it.copy(status = UploadStatus.ERROR, errorMsg = e.message ?: "Upload failed")
-                            else it
-                        }
-                    }
+                val result = when (item) {
+                    is MediaUploadItem.Photo -> uploadImage(item.file)
+                    is MediaUploadItem.Video -> uploadVideo(item.file)
+                }
+                result
+                    .onSuccess { updateItem(item.uri, UploadStatus.DONE) }
+                    .onFailure { e -> updateItem(item.uri, UploadStatus.ERROR, e.message ?: "Upload failed") }
                 finished++
                 if (finished == pending.size) uploading = false
             }
@@ -96,11 +121,11 @@ fun UploadScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column {
-                Text("Upload photos", fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF202124))
-                Text("Add photos to your private vault", fontSize = 13.sp, color = Color(0xFF5F6368))
+                Text("Upload photos & videos", fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF202124))
+                Text("Add photos and videos to your private vault", fontSize = 13.sp, color = Color(0xFF5F6368))
             }
             if (doneCount > 0) {
-                OutlinedButton(onClick = { queue = emptyList(); onClearPickedImages() }) {
+                OutlinedButton(onClick = { queue = emptyList(); onClearPickedMedia() }) {
                     Text("Clear done")
                 }
             }
@@ -163,7 +188,7 @@ fun UploadScreen(
                 .clip(RoundedCornerShape(16.dp))
                 .background(Color(0xFFFAFAFA))
                 .border(2.dp, Color(0xFFDADCE0), RoundedCornerShape(16.dp))
-                .clickable(onClick = onPickImages),
+                .clickable(onClick = onPickMedia),
             contentAlignment = Alignment.Center
         ) {
             Column(
@@ -177,7 +202,7 @@ fun UploadScreen(
                     Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, tint = Color(0xFF1A73E8), modifier = Modifier.size(28.dp))
                 }
                 Text("Select from Gallery", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Color(0xFF202124))
-                Text("PNG, JPG, WEBP · up to 20 MB each", fontSize = 12.sp, color = Color(0xFF9AA0A6))
+                Text("Photos: PNG, JPG, WEBP · Videos: MP4, MOV, MKV", fontSize = 12.sp, color = Color(0xFF9AA0A6))
             }
         }
 
@@ -190,7 +215,7 @@ fun UploadScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "${queue.size} photo${if (queue.size != 1) "s" else ""} selected" +
+                        "${queue.size} file${if (queue.size != 1) "s" else ""} selected" +
                             if (doneCount > 0) " · $doneCount uploaded" else "",
                         fontSize = 14.sp,
                         color = Color(0xFF5F6368)
@@ -198,7 +223,7 @@ fun UploadScreen(
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (!allDone) {
                             OutlinedButton(
-                                onClick = { queue = emptyList(); onClearPickedImages() },
+                                onClick = { queue = emptyList(); onClearPickedMedia() },
                                 enabled = !uploading
                             ) { Text("Clear") }
 
@@ -212,7 +237,7 @@ fun UploadScreen(
                                     Spacer(Modifier.width(6.dp))
                                     Text("Uploading…")
                                 } else {
-                                    Text("Upload $pendingCount photo${if (pendingCount != 1) "s" else ""}")
+                                    Text("Upload $pendingCount file${if (pendingCount != 1) "s" else ""}")
                                 }
                             }
                         }
@@ -226,7 +251,7 @@ fun UploadScreen(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    items(queue, key = { it.file.uri }) { item ->
+                    items(queue, key = { it.uri }) { item ->
                         UploadThumbnail(item = item)
                     }
                 }
@@ -236,19 +261,27 @@ fun UploadScreen(
 }
 
 @Composable
-private fun UploadThumbnail(item: UploadItem) {
+private fun UploadThumbnail(item: MediaUploadItem) {
     Box(
         modifier = Modifier
             .aspectRatio(1f)
             .clip(RoundedCornerShape(4.dp))
             .background(Color(0xFFF1F3F4))
     ) {
-        AsyncImage(
-            model = item.file.uri,
-            contentDescription = item.file.name,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop
-        )
+        when (item) {
+            is MediaUploadItem.Photo -> AsyncImage(
+                model = item.file.uri,
+                contentDescription = item.name,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+            is MediaUploadItem.Video -> Box(
+                modifier = Modifier.fillMaxSize().background(Color(0xFFE8EAED)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.Videocam, contentDescription = item.name, tint = Color(0xFF5F6368), modifier = Modifier.size(32.dp))
+            }
+        }
 
         when (item.status) {
             UploadStatus.UPLOADING -> Box(

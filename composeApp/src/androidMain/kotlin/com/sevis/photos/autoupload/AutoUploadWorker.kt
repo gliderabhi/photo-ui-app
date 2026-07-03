@@ -10,6 +10,7 @@ import androidx.work.*
 import com.sevis.photos.AppState
 import com.sevis.photos.BuildConfig
 import com.sevis.photos.data.PhotoApi
+import com.sevis.photos.data.VideoApi
 import io.ktor.client.*
 import io.ktor.client.engine.android.*
 import io.ktor.client.plugins.contentnegotiation.*
@@ -49,27 +50,42 @@ class AutoUploadWorker(
 
         val sinceEpoch = prefs.getLong(KEY_LAST_SYNC, System.currentTimeMillis() / 1000 - 60)
         val newImages = MediaStoreHelper.getImagesSince(applicationContext, sinceEpoch)
+        val newVideos = MediaStoreHelper.getVideosSince(applicationContext, sinceEpoch)
 
-        if (newImages.isEmpty()) {
-            Log.d(TAG, "No new images since $sinceEpoch")
+        if (newImages.isEmpty() && newVideos.isEmpty()) {
+            Log.d(TAG, "No new media since $sinceEpoch")
             return@withContext Result.success()
         }
 
-        Log.d(TAG, "Found ${newImages.size} new images to upload")
+        Log.d(TAG, "Found ${newImages.size} new images and ${newVideos.size} new videos to upload")
         createNotificationChannel()
 
-        val api = buildApi(token)
+        val client = buildHttpClient(token)
+        val photoApi = PhotoApi(BuildConfig.API_BASE_URL, client)
+        val videoApi = VideoApi(BuildConfig.API_BASE_URL, client)
         var uploaded = 0
 
         newImages.forEach { image ->
             val bytes = MediaStoreHelper.readBytes(applicationContext, image.uri) ?: return@forEach
-            runCatching { api.uploadImage(bytes, image.name, image.mimeType) }
+            runCatching { photoApi.uploadImage(bytes, image.name, image.mimeType) }
                 .onSuccess {
                     uploaded++
                     Log.d(TAG, "Uploaded ${image.name}")
                 }
                 .onFailure { e ->
                     Log.w(TAG, "Failed to upload ${image.name}: ${e.message}")
+                }
+        }
+
+        newVideos.forEach { video ->
+            val bytes = MediaStoreHelper.readBytes(applicationContext, video.uri) ?: return@forEach
+            runCatching { videoApi.uploadVideo(bytes, video.name, video.mimeType) }
+                .onSuccess {
+                    uploaded++
+                    Log.d(TAG, "Uploaded ${video.name}")
+                }
+                .onFailure { e ->
+                    Log.w(TAG, "Failed to upload ${video.name}: ${e.message}")
                 }
         }
 
@@ -85,8 +101,8 @@ class AutoUploadWorker(
         Result.success()
     }
 
-    private fun buildApi(token: String): PhotoApi {
-        val client = HttpClient(Android) {
+    private fun buildHttpClient(token: String): HttpClient {
+        return HttpClient(Android) {
             install(ContentNegotiation) {
                 json(Json { ignoreUnknownKeys = true })
             }
@@ -99,7 +115,6 @@ class AutoUploadWorker(
                 }
             })
         }
-        return PhotoApi(BuildConfig.API_BASE_URL, client)
     }
 
     private fun createNotificationChannel() {

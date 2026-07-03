@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Declares this a proper Android TV app so it's installable/listed on TV
+         devices; touchscreen isn't required since a TV has none. -->
+    <uses-feature
+        android:name="android.software.leanback"
+        android:required="true" />
+    <uses-feature
+        android:name="android.hardware.touchscreen"
+        android:required="false" />
+
+    <application android:banner="@drawable/banner">
+
+        <!-- Same MainActivity/Compose UI as the mobile flavor — this just adds
+             the leanback launcher entry point so it appears in the Android TV
+             home screen's launcher row. -->
+        <activity android:name=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+    </application>
+</manifest>

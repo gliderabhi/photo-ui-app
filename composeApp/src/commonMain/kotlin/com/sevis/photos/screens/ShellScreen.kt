@@ -13,29 +13,40 @@ import androidx.compose.ui.unit.dp
 import com.sevis.photos.data.ImageFile
 import com.sevis.photos.data.PhotoApi
 import com.sevis.photos.data.PhotoResponse
+import com.sevis.photos.data.VideoApi
+import com.sevis.photos.data.VideoFile
+import com.sevis.photos.data.VideoResponse
 
 private data class NavItem(val label: String, val selectedIcon: ImageVector, val unselectedIcon: ImageVector)
 
 private val NAV_ITEMS = listOf(
     NavItem("Gallery", Icons.Filled.PhotoLibrary, Icons.Outlined.PhotoLibrary),
     NavItem("Upload", Icons.Filled.CloudUpload, Icons.Outlined.CloudUpload),
+    NavItem("Videos", Icons.Filled.VideoLibrary, Icons.Outlined.VideoLibrary),
     NavItem("Albums", Icons.Filled.Photo, Icons.Outlined.Photo),
     NavItem("Favorites", Icons.Filled.Favorite, Icons.Outlined.FavoriteBorder),
 )
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ShellScreen(
     api: PhotoApi,
     baseUrl: String,
     pickedImages: List<ImageFile>,
-    onPickImages: () -> Unit,
-    onClearPickedImages: () -> Unit,
+    pickedVideos: List<VideoFile>,
+    onPickMedia: () -> Unit,
+    onClearPickedMedia: () -> Unit,
     uploadImage: suspend (ImageFile) -> Result<PhotoResponse>,
+    videoApi: VideoApi,
+    uploadVideo: suspend (VideoFile) -> Result<VideoResponse>,
+    onPlayVideo: (String) -> Unit,
     autoUploadEnabled: Boolean,
     onAutoUploadToggle: (Boolean) -> Unit,
     onFavoritesChange: (Set<Int>) -> Unit,
     onLogout: () -> Unit,
-    onLockFolder: () -> Unit
+    onLockFolder: () -> Unit,
+    appDownloadUrl: String,
+    onOpenUrl: (String) -> Unit
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
     var showMenu by remember { mutableStateOf(false) }
@@ -54,6 +65,11 @@ fun ShellScreen(
                                 text = { Text("Lock Folder") },
                                 leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
                                 onClick = { showMenu = false; onLockFolder() }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Get Latest App") },
+                                leadingIcon = { Icon(Icons.Default.Android, contentDescription = null) },
+                                onClick = { showMenu = false; onOpenUrl(appDownloadUrl) }
                             )
                             DropdownMenuItem(
                                 text = { Text("Logout") },
@@ -98,14 +114,20 @@ fun ShellScreen(
                 )
                 1 -> UploadScreen(
                     pickedImages = pickedImages,
-                    onPickImages = onPickImages,
-                    onClearPickedImages = onClearPickedImages,
+                    pickedVideos = pickedVideos,
+                    onPickMedia = onPickMedia,
+                    onClearPickedMedia = onClearPickedMedia,
                     uploadImage = uploadImage,
+                    uploadVideo = uploadVideo,
                     autoUploadEnabled = autoUploadEnabled,
                     onAutoUploadToggle = onAutoUploadToggle
                 )
-                2 -> AlbumsScreen(api = api, baseUrl = baseUrl)
-                3 -> GalleryScreen(
+                2 -> VideoListScreen(
+                    videoApi = videoApi,
+                    onPlayVideo = onPlayVideo
+                )
+                3 -> AlbumsScreen(api = api, baseUrl = baseUrl)
+                4 -> GalleryScreen(
                     api = api,
                     baseUrl = baseUrl,
                     favoritesOnly = true,

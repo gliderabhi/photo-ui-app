@@ -50,3 +50,34 @@ data class UploadItem(
     val status: UploadStatus = UploadStatus.PENDING,
     val errorMsg: String? = null
 )
+
+/** A locally-picked video file, used in the video upload queue. */
+data class VideoFile(
+    val uri: String,
+    val name: String,
+    val mimeType: String
+)
+
+data class VideoUploadItem(
+    val file: VideoFile,
+    val status: UploadStatus = UploadStatus.PENDING,
+    val errorMsg: String? = null
+)
+
+@Serializable
+data class VideoResponse(
+    val id: String,
+    val title: String,
+    val originalFilename: String,
+    val status: String,
+    val durationSeconds: Int = 0,
+    val fileSizeBytes: Long = 0,
+    val transcodeProgress: Int = 0,
+    val errorMessage: String? = null,
+    val description: String? = null,
+    val thumbnailUrl: String? = null,
+    val masterPlaylistUrl: String? = null,
+    val rawStreamUrl: String? = null,
+    val availableQualities: List<String> = emptyList(),
+    val createdAt: String? = null
+)

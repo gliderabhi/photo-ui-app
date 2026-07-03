@@ -47,6 +47,7 @@ fun GalleryScreen(
     var lightboxPhoto by remember { mutableStateOf<PhotoResponse?>(null) }
     var showInfoPanel by remember { mutableStateOf(false) }
     var favorites by remember { mutableStateOf(AppState.favoriteIds.toSet()) }
+    var albumMatchedPhotoIds by remember { mutableStateOf<Set<Int>>(emptySet()) }
 
     fun reload() {
         loading = true
@@ -64,7 +65,29 @@ fun GalleryScreen(
 
     LaunchedEffect(Unit) { reload() }
 
-    val filteredGroups = remember(allGroups, searchQuery, favoritesOnly, favorites) {
+    // Resolve which photos belong to albums whose name matches the search query —
+    // album membership isn't in PhotoResponse, so this needs a separate fetch per
+    // matching album rather than a pure client-side filter.
+    LaunchedEffect(searchQuery, albums) {
+        val q = searchQuery.trim().lowercase()
+        if (q.isBlank()) {
+            albumMatchedPhotoIds = emptySet()
+            return@LaunchedEffect
+        }
+        val matchingAlbums = albums.filter { it.name.lowercase().contains(q) }
+        if (matchingAlbums.isEmpty()) {
+            albumMatchedPhotoIds = emptySet()
+            return@LaunchedEffect
+        }
+        val ids = mutableSetOf<Int>()
+        matchingAlbums.forEach { album ->
+            runCatching { api.getAlbumPhotos(album.id) }
+                .onSuccess { photos -> ids.addAll(photos.map { it.id }) }
+        }
+        albumMatchedPhotoIds = ids
+    }
+
+    val filteredGroups = remember(allGroups, searchQuery, favoritesOnly, favorites, albumMatchedPhotoIds) {
         var groups = allGroups
         if (favoritesOnly) {
             groups = groups.map { (date, photos) -> date to photos.filter { favorites.contains(it.id) } }
@@ -74,7 +97,7 @@ fun GalleryScreen(
             val q = searchQuery.lowercase()
             groups = groups.map { (date, photos) ->
                 date to photos.filter {
-                    it.originalFilename.lowercase().contains(q) || date.contains(q)
+                    it.originalFilename.lowercase().contains(q) || date.contains(q) || albumMatchedPhotoIds.contains(it.id)
                 }
             }.filter { it.second.isNotEmpty() }
         }
@@ -267,7 +290,7 @@ fun GalleryScreen(
                     OutlinedTextField(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
-                        placeholder = { Text("Search by name or date…") },
+                        placeholder = { Text("Search by name, date, or album…") },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
                         shape = RoundedCornerShape(24.dp),
