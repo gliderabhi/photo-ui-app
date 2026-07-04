@@ -39,9 +39,13 @@ fun App(
     onPlayVideo: (String) -> Unit,
     autoUploadEnabled: Boolean,
     onAutoUploadToggle: (Boolean) -> Unit,
-    appDownloadUrl: String,
-    onOpenUrl: (String) -> Unit,
-    extraLoginContent: (@Composable ((String) -> Unit) -> Unit)? = null
+    updateProgress: Int?,
+    updateError: String?,
+    onDismissUpdateError: () -> Unit,
+    onUpdateApp: () -> Unit,
+    extraLoginContent: (@Composable ((String) -> Unit) -> Unit)? = null,
+    showCredentialsForm: Boolean = true,
+    isTv: Boolean = false
 ) {
     MaterialTheme {
         val navController = rememberNavController()
@@ -61,7 +65,8 @@ fun App(
                             popUpTo(Routes.LOGIN) { inclusive = true }
                         }
                     },
-                    extraLoginContent = extraLoginContent
+                    extraLoginContent = extraLoginContent,
+                    showCredentialsForm = showCredentialsForm
                 )
             }
 
@@ -138,8 +143,11 @@ fun App(
                             popUpTo(Routes.SHELL) { inclusive = true }
                         }
                     },
-                    appDownloadUrl = appDownloadUrl,
-                    onOpenUrl = onOpenUrl
+                    updateProgress = updateProgress,
+                    updateError = updateError,
+                    onDismissUpdateError = onDismissUpdateError,
+                    onUpdateApp = onUpdateApp,
+                    isTv = isTv
                 )
             }
         }

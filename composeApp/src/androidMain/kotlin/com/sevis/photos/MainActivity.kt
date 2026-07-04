@@ -57,6 +57,9 @@ class MainActivity : ComponentActivity() {
         setContent {
             var pickedImages by remember { mutableStateOf<List<ImageFile>>(emptyList()) }
             var pickedVideos by remember { mutableStateOf<List<VideoFile>>(emptyList()) }
+            // Null = no update in progress; 0..100 = download percent.
+            var updateProgress by remember { mutableStateOf<Int?>(null) }
+            var updateError by remember { mutableStateOf<String?>(null) }
 
             // Single picker for both photos and videos (mirrors the web app's unified
             // upload page) — classify each returned URI by MIME type after the fact,
@@ -164,9 +167,22 @@ class MainActivity : ComponentActivity() {
                         AutoUploadScheduler.cancel(applicationContext)
                     }
                 },
-                appDownloadUrl = "${BuildConfig.API_BASE_URL}/photo-service/downloads/app-mobile.apk",
-                onOpenUrl = { url ->
-                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                updateProgress = updateProgress,
+                updateError = updateError,
+                onDismissUpdateError = { updateError = null },
+                onUpdateApp = {
+                    updateProgress = 0
+                    updateError = null
+                    val apkName = if (BuildConfig.FLAVOR == "tv") "app.apk" else "app-mobile.apk"
+                    UpdateManager.downloadAndInstall(
+                        context = this,
+                        apkUrl = "${BuildConfig.API_BASE_URL}/photo-service/downloads/$apkName",
+                        onProgress = { pct -> updateProgress = pct },
+                        onError = { msg ->
+                            updateProgress = null
+                            updateError = msg
+                        }
+                    )
                 },
                 // TV gets the QR/device-code flow (typing a Gmail password via a
                 // D-pad on-screen keyboard is painful); mobile gets the standard
@@ -175,7 +191,12 @@ class MainActivity : ComponentActivity() {
                     { onSuccess -> TvGoogleLoginContent(api = api, onLoginSuccess = onSuccess) }
                 } else {
                     { onSuccess -> MobileGoogleLoginContent(api = api, onLoginSuccess = onSuccess) }
-                }
+                },
+                // TV is Google-only: typing an email/password via a D-pad
+                // on-screen keyboard is painful, and the QR/device-code flow
+                // above is always available.
+                showCredentialsForm = BuildConfig.FLAVOR != "tv",
+                isTv = BuildConfig.FLAVOR == "tv"
             )
         }
     }

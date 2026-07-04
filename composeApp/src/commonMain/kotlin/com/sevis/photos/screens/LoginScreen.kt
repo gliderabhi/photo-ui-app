@@ -2,12 +2,11 @@ package com.sevis.photos.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -15,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -24,7 +24,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sevis.photos.data.PhotoApi
 import com.sevis.photos.data.isUnauthorized
+import com.sevis.photos.tvFocusRing
+import photosapp.composeapp.generated.resources.Res
+import photosapp.composeapp.generated.resources.app_icon
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.painterResource
 
 @Composable
 fun LoginScreen(
@@ -35,7 +39,11 @@ fun LoginScreen(
     // the same onLoginSuccess so a successful Google login navigates onward
     // exactly like the form above does, instead of just silently setting
     // AppState.token with no navigation follow-through.
-    extraLoginContent: (@Composable ((String) -> Unit) -> Unit)? = null
+    extraLoginContent: (@Composable ((String) -> Unit) -> Unit)? = null,
+    // False on TV: typing an email/password via a D-pad-driven on-screen
+    // keyboard is painful, and TV's Google QR/device-code flow is always
+    // available, so the form is just dead weight there.
+    showCredentialsForm: Boolean = true
 ) {
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
@@ -75,93 +83,101 @@ fun LoginScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
-                Box(
-                    modifier = Modifier.size(64.dp).clip(CircleShape).background(Color(0xFF2563EB)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.PhotoLibrary, contentDescription = "Photos logo", tint = Color.White, modifier = Modifier.size(32.dp))
-                }
+                Image(
+                    painter = painterResource(Res.drawable.app_icon),
+                    contentDescription = "Photos logo",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.size(64.dp).clip(CircleShape)
+                )
 
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("Sign In", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E293B))
-                    Text("Enter your credentials to continue", fontSize = 13.sp, color = Color(0xFF64748B))
+                    Text(
+                        if (showCredentialsForm) "Enter your credentials to continue" else "Sign in with your Google account",
+                        fontSize = 13.sp,
+                        color = Color(0xFF64748B)
+                    )
                 }
 
-                OutlinedTextField(
-                    value = email,
-                    onValueChange = { email = it },
-                    label = { Text("Email Address") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Email,
-                        imeAction = ImeAction.Next
-                    ),
-                    keyboardActions = KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) }),
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp)
-                )
+                if (showCredentialsForm) {
+                    OutlinedTextField(
+                        value = email,
+                        onValueChange = { email = it },
+                        label = { Text("Email Address") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Email,
+                            imeAction = ImeAction.Next
+                        ),
+                        keyboardActions = KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) }),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp)
+                    )
 
-                OutlinedTextField(
-                    value = password,
-                    onValueChange = { password = it },
-                    label = { Text("Password") },
-                    singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Password,
-                        imeAction = ImeAction.Done
-                    ),
-                    keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus(); submit() }),
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp)
-                )
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = { password = it },
+                        label = { Text("Password") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Password,
+                            imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus(); submit() }),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp)
+                    )
 
-                if (error.isNotBlank()) {
-                    Surface(
-                        color = Color(0xFFFEF2F2),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            error,
-                            modifier = Modifier.padding(12.dp),
-                            fontSize = 13.sp,
-                            color = Color(0xFFDC2626)
-                        )
+                    if (error.isNotBlank()) {
+                        Surface(
+                            color = Color(0xFFFEF2F2),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                error,
+                                modifier = Modifier.padding(12.dp),
+                                fontSize = 13.sp,
+                                color = Color(0xFFDC2626)
+                            )
+                        }
                     }
-                }
 
-                Button(
-                    onClick = { focusManager.clearFocus(); submit() },
-                    enabled = !loading && email.isNotBlank() && password.isNotBlank(),
-                    modifier = Modifier.fillMaxWidth().height(50.dp),
-                    shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
-                ) {
-                    if (loading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            color = Color.White,
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        Text("Sign In", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                    Button(
+                        onClick = { focusManager.clearFocus(); submit() },
+                        enabled = !loading && email.isNotBlank() && password.isNotBlank(),
+                        modifier = Modifier.fillMaxWidth().height(50.dp).tvFocusRing(),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
+                    ) {
+                        if (loading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                color = Color.White,
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Text("Sign In", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        }
                     }
                 }
 
                 if (extraLoginContent != null) {
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                        HorizontalDivider(modifier = Modifier.weight(1f))
-                        Text("  OR  ", fontSize = 12.sp, color = Color(0xFF94A3B8))
-                        HorizontalDivider(modifier = Modifier.weight(1f))
+                    if (showCredentialsForm) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            HorizontalDivider(modifier = Modifier.weight(1f))
+                            Text("  OR  ", fontSize = 12.sp, color = Color(0xFF94A3B8))
+                            HorizontalDivider(modifier = Modifier.weight(1f))
+                        }
                     }
 
-                    if (showGoogleSignIn) {
+                    if (!showCredentialsForm || showGoogleSignIn) {
                         extraLoginContent(onLoginSuccess)
                     } else {
                         OutlinedButton(
                             onClick = { showGoogleSignIn = true },
-                            modifier = Modifier.fillMaxWidth().height(50.dp),
+                            modifier = Modifier.fillMaxWidth().height(50.dp).tvFocusRing(),
                             shape = RoundedCornerShape(8.dp)
                         ) {
                             Text("Sign in with Google", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Color(0xFF1E293B))

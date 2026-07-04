@@ -16,6 +16,10 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- In-app update: lets us launch the system installer on the APK we
+         download ourselves, same as the stream-tv app's update flow. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <application
         android:name=".PhotosApplication"
         android:allowBackup="true"

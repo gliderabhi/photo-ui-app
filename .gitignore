@@ -27,3 +27,5 @@ Thumbs.db
 keystore.properties
 *.jks
 *.keystore
+client_secret_*.json
+tv-login.json

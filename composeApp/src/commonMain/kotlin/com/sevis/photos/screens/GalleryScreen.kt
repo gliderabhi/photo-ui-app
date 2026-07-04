@@ -13,8 +13,15 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -22,6 +29,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil3.compose.AsyncImage
 import com.sevis.photos.AppState
+import com.sevis.photos.tvFocusRing
 import com.sevis.photos.data.AlbumResponse
 import com.sevis.photos.data.PhotoApi
 import com.sevis.photos.data.PhotoResponse
@@ -32,7 +40,8 @@ fun GalleryScreen(
     api: PhotoApi,
     baseUrl: String,
     favoritesOnly: Boolean,
-    onFavoritesChange: (Set<Int>) -> Unit
+    onFavoritesChange: (Set<Int>) -> Unit,
+    isTv: Boolean = false
 ) {
     val scope = rememberCoroutineScope()
 
@@ -287,12 +296,40 @@ fun GalleryScreen(
         Surface(shadowElevation = 1.dp, color = Color(0xFFF4F7FC)) {
             Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // On TV, D-pad focus landing on a text field is not the same as
+                    // "the user wants to type" — Compose shows the soft keyboard on
+                    // focus by default, which pops it up just from navigating past
+                    // the field. Keep it read-only (and the keyboard hidden) until
+                    // the user actually presses OK/Enter on it.
+                    var searchActivated by remember { mutableStateOf(!isTv) }
+                    val keyboardController = LocalSoftwareKeyboardController.current
                     OutlinedTextField(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
                         placeholder = { Text("Search by name, date, or album…", fontSize = 13.sp) },
                         textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp),
-                        modifier = Modifier.weight(1f).height(44.dp),
+                        readOnly = isTv && !searchActivated,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(44.dp)
+                            .then(if (isTv) Modifier.tvFocusRing(cornerRadius = 22.dp) else Modifier)
+                            .onFocusChanged { state ->
+                                if (isTv && !state.isFocused) {
+                                    searchActivated = false
+                                    keyboardController?.hide()
+                                }
+                            }
+                            .onPreviewKeyEvent { event ->
+                                if (isTv && event.type == KeyEventType.KeyUp &&
+                                    (event.key == Key.DirectionCenter || event.key == Key.Enter)
+                                ) {
+                                    searchActivated = true
+                                    keyboardController?.show()
+                                    true
+                                } else {
+                                    false
+                                }
+                            },
                         singleLine = true,
                         shape = RoundedCornerShape(22.dp),
                         leadingIcon = {

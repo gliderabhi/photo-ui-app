@@ -1,5 +1,6 @@
 package com.sevis.photos.screens
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -13,13 +14,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.sevis.photos.data.ImageFile
 import com.sevis.photos.data.PhotoApi
 import com.sevis.photos.data.PhotoResponse
 import com.sevis.photos.data.VideoApi
 import com.sevis.photos.data.VideoFile
 import com.sevis.photos.data.VideoResponse
+import com.sevis.photos.tvFocusRing
+import photosapp.composeapp.generated.resources.Res
+import photosapp.composeapp.generated.resources.app_icon
+import org.jetbrains.compose.resources.painterResource
 
 private data class NavItem(val label: String, val selectedIcon: ImageVector, val unselectedIcon: ImageVector)
 
@@ -49,43 +56,56 @@ fun ShellScreen(
     onFavoritesChange: (Set<Int>) -> Unit,
     onLogout: () -> Unit,
     onLockFolder: () -> Unit,
-    appDownloadUrl: String,
-    onOpenUrl: (String) -> Unit
+    updateProgress: Int?,
+    updateError: String?,
+    onDismissUpdateError: () -> Unit,
+    onUpdateApp: () -> Unit,
+    isTv: Boolean = false
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
     var showMenu by remember { mutableStateOf(false) }
 
+    // TVs commonly overscan and crop a margin off every edge of the picture —
+    // content sitting flush against the screen edge (the top bar's menu icon,
+    // the bottom nav's outer tabs) gets cut off on those sets.
+    val overscanPadding = if (isTv) Modifier.padding(horizontal = 24.dp, vertical = 16.dp) else Modifier
+
     Scaffold(
+        modifier = overscanPadding,
         topBar = {
             TopAppBar(
                 title = {
-                    Icon(
-                        Icons.Filled.PhotoLibrary,
+                    Image(
+                        painter = painterResource(Res.drawable.app_icon),
                         contentDescription = "Photos",
-                        tint = Color.White,
-                        modifier = Modifier.size(26.dp)
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.size(28.dp).clip(CircleShape)
                     )
                 },
                 actions = {
                     Box {
-                        IconButton(onClick = { showMenu = true }) {
+                        IconButton(onClick = { showMenu = true }, modifier = Modifier.tvFocusRing(cornerRadius = 24.dp)) {
                             Icon(Icons.Default.MoreVert, contentDescription = "Menu", tint = Color.White)
                         }
                         DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                             DropdownMenuItem(
                                 text = { Text("Lock Folder") },
                                 leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
-                                onClick = { showMenu = false; onLockFolder() }
+                                onClick = { showMenu = false; onLockFolder() },
+                                modifier = Modifier.tvFocusRing()
                             )
                             DropdownMenuItem(
-                                text = { Text("Get Latest App") },
+                                text = { Text(if (updateProgress != null) "Updating… ${updateProgress}%" else "Update App") },
                                 leadingIcon = { Icon(Icons.Default.Android, contentDescription = null) },
-                                onClick = { showMenu = false; onOpenUrl(appDownloadUrl) }
+                                enabled = updateProgress == null,
+                                onClick = { showMenu = false; onUpdateApp() },
+                                modifier = Modifier.tvFocusRing()
                             )
                             DropdownMenuItem(
                                 text = { Text("Logout") },
                                 leadingIcon = { Icon(Icons.Default.Logout, contentDescription = null) },
-                                onClick = { showMenu = false; onLogout() }
+                                onClick = { showMenu = false; onLogout() },
+                                modifier = Modifier.tvFocusRing()
                             )
                         }
                     }
@@ -102,6 +122,7 @@ fun ShellScreen(
                     NavigationBarItem(
                         selected = selectedTab == index,
                         onClick = { selectedTab = index },
+                        modifier = Modifier.tvFocusRing(),
                         icon = {
                             Icon(
                                 if (selectedTab == index) item.selectedIcon else item.unselectedIcon,
@@ -128,7 +149,8 @@ fun ShellScreen(
                     api = api,
                     baseUrl = baseUrl,
                     favoritesOnly = false,
-                    onFavoritesChange = onFavoritesChange
+                    onFavoritesChange = onFavoritesChange,
+                    isTv = isTv
                 )
                 1 -> UploadScreen(
                     pickedImages = pickedImages,
@@ -149,9 +171,40 @@ fun ShellScreen(
                     api = api,
                     baseUrl = baseUrl,
                     favoritesOnly = true,
-                    onFavoritesChange = onFavoritesChange
+                    onFavoritesChange = onFavoritesChange,
+                    isTv = isTv
                 )
             }
         }
+    }
+
+    if (updateProgress != null) {
+        AlertDialog(
+            onDismissRequest = {},
+            confirmButton = {},
+            title = { Text("Updating") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    LinearProgressIndicator(
+                        progress = { updateProgress / 100f },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text("Downloading… $updateProgress%", fontSize = 13.sp, color = Color(0xFF64748B))
+                }
+            }
+        )
+    }
+
+    if (updateError != null) {
+        AlertDialog(
+            onDismissRequest = onDismissUpdateError,
+            confirmButton = {
+                TextButton(onClick = onDismissUpdateError, modifier = Modifier.tvFocusRing()) {
+                    Text("OK")
+                }
+            },
+            title = { Text("Update failed") },
+            text = { Text(updateError) }
+        )
     }
 }

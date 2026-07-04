@@ -39,7 +39,12 @@ fun TvGoogleLoginContent(api: PhotoApi, onLoginSuccess: (String) -> Unit) {
             val device = GoogleDeviceAuth.requestDeviceCode()
             userCode = device.user_code
             verificationUrl = device.verification_url
-            qrBitmap = generateQrBitmap(device.verification_url, 260)
+            // Encode the code straight into the QR's URL (Google's device
+            // activation page accepts it via ?user_code=) so scanning jumps
+            // straight to the "confirm this device" screen instead of a blank
+            // "enter your code" page the user then has to copy the code into
+            // by re-reading it off the TV.
+            qrBitmap = generateQrBitmap("${device.verification_url}?user_code=${device.user_code}", 260)
 
             val deadline = System.currentTimeMillis() + device.expires_in * 1000L
             while (System.currentTimeMillis() < deadline) {
@@ -62,8 +67,6 @@ fun TvGoogleLoginContent(api: PhotoApi, onLoginSuccess: (String) -> Unit) {
         verticalArrangement = Arrangement.spacedBy(16.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Text("Or sign in with Google", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = Color(0xFF64748B))
-
         when {
             error != null -> Text(error!!, fontSize = 13.sp, color = Color(0xFFDC2626))
             qrBitmap == null -> CircularProgressIndicator()
