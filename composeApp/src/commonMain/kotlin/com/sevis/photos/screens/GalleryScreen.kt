@@ -284,17 +284,24 @@ fun GalleryScreen(
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Top bar: search + actions
-        Surface(shadowElevation = 1.dp, color = Color.White) {
+        Surface(shadowElevation = 1.dp, color = Color(0xFFF4F7FC)) {
             Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
-                        placeholder = { Text("Search by name, date, or album…") },
-                        modifier = Modifier.weight(1f),
+                        placeholder = { Text("Search by name, date, or album…", fontSize = 13.sp) },
+                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp),
+                        modifier = Modifier.weight(1f).height(44.dp),
                         singleLine = true,
-                        shape = RoundedCornerShape(24.dp),
-                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) }
+                        shape = RoundedCornerShape(22.dp),
+                        leadingIcon = {
+                            Icon(
+                                Icons.Default.Search,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     )
                     Button(
                         onClick = { bulkMode = !bulkMode; selectedIds = emptySet() },

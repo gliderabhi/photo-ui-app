@@ -20,21 +20,22 @@ import io.ktor.http.*
  */
 class VideoApi(private val baseUrl: String, val client: HttpClient) {
 
+    // Authorization is already added to every request by the shared client's
+    // "DynamicAuth" plugin (see MainActivity.buildKtorClient) — adding it again
+    // here would append a second, duplicate Authorization header (Ktor's
+    // header() appends rather than replaces), which some backends/gateways
+    // reject outright as malformed.
     private fun HttpRequestBuilder.auth() {
-        AppState.token?.let { header(HttpHeaders.Authorization, "Bearer $it") }
         AppState.folderPassword?.let { header("X-Folder-Password", it) }
     }
 
     suspend fun listVideos(): List<VideoResponse> =
         client.get("$baseUrl/stream-service/api/videos") {
-            AppState.token?.let { header(HttpHeaders.Authorization, "Bearer $it") }
             parameter("sourceApp", "PHOTOS")
         }.body()
 
     suspend fun getVideo(id: String): VideoResponse =
-        client.get("$baseUrl/stream-service/api/videos/$id") {
-            AppState.token?.let { header(HttpHeaders.Authorization, "Bearer $it") }
-        }.body()
+        client.get("$baseUrl/stream-service/api/videos/$id").body()
 
     suspend fun uploadVideo(bytes: ByteArray, filename: String, mimeType: String): VideoResponse =
         client.post("$baseUrl/photo-service/api/photos/videos/upload") {

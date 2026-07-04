@@ -2,13 +2,17 @@ package com.sevis.photos.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
@@ -26,21 +30,21 @@ import kotlinx.coroutines.launch
 fun LoginScreen(
     api: PhotoApi,
     onLoginSuccess: (String) -> Unit,
-    // Only supplied on the TV flavor (see MainActivity) — email/password entry
-    // via a D-pad-driven on-screen keyboard is painful, so TV gets a QR/device-
-    // code Google sign-in slot instead. Null on mobile, where the form above is
-    // enough. Receives the same onLoginSuccess so a successful device-flow login
-    // navigates onward exactly like the form above does, instead of just
-    // silently setting AppState.token with no navigation follow-through.
+    // Google sign-in slot (see MainActivity): TV's QR/device-code flow or
+    // mobile's native Credential Manager picker, depending on flavor. Receives
+    // the same onLoginSuccess so a successful Google login navigates onward
+    // exactly like the form above does, instead of just silently setting
+    // AppState.token with no navigation follow-through.
     extraLoginContent: (@Composable ((String) -> Unit) -> Unit)? = null
 ) {
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
 
-    var email by remember { mutableStateOf("admin@sevis.com") }
-    var password by remember { mutableStateOf("Admin@1234") }
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf("") }
+    var showGoogleSignIn by remember { mutableStateOf(false) }
 
     fun submit() {
         if (email.isBlank() || password.isBlank()) return
@@ -68,9 +72,17 @@ fun LoginScreen(
         ) {
             Column(
                 modifier = Modifier.padding(40.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Box(
+                    modifier = Modifier.size(64.dp).clip(CircleShape).background(Color(0xFF2563EB)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.PhotoLibrary, contentDescription = "Photos logo", tint = Color.White, modifier = Modifier.size(32.dp))
+                }
+
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("Sign In", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E293B))
                     Text("Enter your credentials to continue", fontSize = 13.sp, color = Color(0xFF64748B))
                 }
@@ -137,7 +149,25 @@ fun LoginScreen(
                     }
                 }
 
-                extraLoginContent?.invoke(onLoginSuccess)
+                if (extraLoginContent != null) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        HorizontalDivider(modifier = Modifier.weight(1f))
+                        Text("  OR  ", fontSize = 12.sp, color = Color(0xFF94A3B8))
+                        HorizontalDivider(modifier = Modifier.weight(1f))
+                    }
+
+                    if (showGoogleSignIn) {
+                        extraLoginContent(onLoginSuccess)
+                    } else {
+                        OutlinedButton(
+                            onClick = { showGoogleSignIn = true },
+                            modifier = Modifier.fillMaxWidth().height(50.dp),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("Sign in with Google", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Color(0xFF1E293B))
+                        }
+                    }
+                }
             }
         }
     }

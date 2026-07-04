@@ -7,6 +7,8 @@ import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.request.forms.*
 import io.ktor.http.*
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 /** True if this came from a 401 response — e.g. an expired/missing JWT that the
  *  gateway rejected outright (with an empty body) before reaching the backend. */
@@ -15,13 +17,16 @@ fun Throwable.isUnauthorized(): Boolean =
 
 class PhotoApi(private val baseUrl: String, val client: HttpClient) {
 
+    // Authorization is already added to every request by the shared client's
+    // "DynamicAuth" plugin (see MainActivity.buildKtorClient) — adding it again
+    // here via header() would append a second, duplicate Authorization header
+    // (Ktor's header() appends rather than replaces), which some backends/
+    // gateways reject outright as malformed, surfacing as a confusing 401.
     private fun HttpRequestBuilder.auth() {
-        AppState.token?.let { header(HttpHeaders.Authorization, "Bearer $it") }
         AppState.folderPassword?.let { header("X-Folder-Password", it) }
     }
 
     private fun HttpRequestBuilder.folderAuth(password: String? = null) {
-        AppState.token?.let { header(HttpHeaders.Authorization, "Bearer $it") }
         val pwd = password ?: AppState.folderPassword
         pwd?.let { header("X-Folder-Password", it) }
     }
@@ -37,7 +42,10 @@ class PhotoApi(private val baseUrl: String, val client: HttpClient) {
     suspend fun googleLogin(idToken: String, longLived: Boolean = false): AuthResponse =
         client.post("$baseUrl/user-service/api/auth/google") {
             contentType(ContentType.Application.Json)
-            setBody(mapOf("idToken" to idToken, "longLived" to longLived.toString()))
+            setBody(buildJsonObject {
+                put("idToken", idToken)
+                put("longLived", longLived)
+            })
         }.body()
 
     suspend fun logout() {

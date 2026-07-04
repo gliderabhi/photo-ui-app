@@ -1,12 +1,16 @@
 package com.sevis.photos.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
@@ -54,11 +58,18 @@ fun ShellScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Photos", style = MaterialTheme.typography.titleLarge) },
+                title = {
+                    Icon(
+                        Icons.Filled.PhotoLibrary,
+                        contentDescription = "Photos",
+                        tint = Color.White,
+                        modifier = Modifier.size(26.dp)
+                    )
+                },
                 actions = {
                     Box {
                         IconButton(onClick = { showMenu = true }) {
-                            Icon(Icons.Default.MoreVert, contentDescription = "Menu")
+                            Icon(Icons.Default.MoreVert, contentDescription = "Menu", tint = Color.White)
                         }
                         DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                             DropdownMenuItem(
@@ -80,13 +91,13 @@ fun ShellScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.White,
-                    titleContentColor = Color(0xFF202124)
+                    containerColor = Color(0xFF2563EB),
+                    titleContentColor = Color.White
                 )
             )
         },
         bottomBar = {
-            NavigationBar(containerColor = Color.White, tonalElevation = 0.dp) {
+            NavigationBar(containerColor = Color(0xFFEEF2FB), tonalElevation = 0.dp) {
                 NAV_ITEMS.forEachIndexed { index, item ->
                     NavigationBarItem(
                         selected = selectedTab == index,
@@ -97,12 +108,19 @@ fun ShellScreen(
                                 contentDescription = item.label
                             )
                         },
-                        label = { Text(item.label) }
+                        label = { Text(item.label) },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = Color(0xFF2563EB),
+                            selectedTextColor = Color(0xFF2563EB),
+                            indicatorColor = Color(0xFFD8E3FA),
+                            unselectedIconColor = Color(0xFF5F6368),
+                            unselectedTextColor = Color(0xFF5F6368)
+                        )
                     )
                 }
             }
         },
-        containerColor = Color(0xFFFAFAFA)
+        containerColor = Color(0xFFF4F7FC)
     ) { paddingValues ->
         Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
             when (selectedTab) {

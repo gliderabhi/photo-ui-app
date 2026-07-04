@@ -20,6 +20,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
@@ -86,48 +87,51 @@ private fun VideoTile(video: VideoResponse, videoApi: VideoApi, onPlayVideo: (St
     val playableUrl = video.masterPlaylistUrl ?: video.rawStreamUrl
     val isPlayable = playableUrl != null
 
-    Box(
-        modifier = Modifier
-            .aspectRatio(16f / 10f)
-            .clip(RoundedCornerShape(8.dp))
-            .background(Color(0xFFF1F3F4))
-            .clickable(enabled = isPlayable) {
-                playableUrl?.let { onPlayVideo(videoApi.resolveUrl(it)) }
+    Column {
+        Box(
+            modifier = Modifier
+                .aspectRatio(16f / 10f)
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color(0xFFF1F3F4))
+                .clickable(enabled = isPlayable) {
+                    playableUrl?.let { onPlayVideo(videoApi.resolveUrl(it)) }
+                }
+        ) {
+            video.thumbnailUrl?.let {
+                AsyncImage(
+                    model = videoApi.resolveUrl(it),
+                    contentDescription = video.title,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
             }
-    ) {
-        video.thumbnailUrl?.let {
-            AsyncImage(
-                model = videoApi.resolveUrl(it),
-                contentDescription = video.title,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-        }
 
-        if (isPlayable) {
-            Box(
-                modifier = Modifier.align(Alignment.Center).size(40.dp).clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.5f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Default.PlayArrow, contentDescription = "Play", tint = Color.White)
+            if (isPlayable) {
+                Box(
+                    modifier = Modifier.align(Alignment.Center).size(40.dp).clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.5f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = "Play", tint = Color.White)
+                }
+            } else if (video.status == "FAILED") {
+                Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f)), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.Error, contentDescription = "Failed", tint = Color(0xFFEA4335))
+                }
+            } else {
+                // No raw file yet and no HLS yet (e.g. still downloading) — nothing
+                // playable, but we don't surface encoding/processing state in the UI.
+                Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.25f)))
             }
-        } else if (video.status == "FAILED") {
-            Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f)), contentAlignment = Alignment.Center) {
-                Icon(Icons.Default.Error, contentDescription = "Failed", tint = Color(0xFFEA4335))
-            }
-        } else {
-            // No raw file yet and no HLS yet (e.g. still downloading) — nothing
-            // playable, but we don't surface encoding/processing state in the UI.
-            Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.25f)))
         }
 
         Text(
             video.title,
-            fontSize = 11.sp,
-            color = Color.White,
-            modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth()
-                .background(Color.Black.copy(alpha = 0.5f)).padding(4.dp)
+            fontSize = 12.sp,
+            color = Color(0xFF202124),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
         )
     }
 }

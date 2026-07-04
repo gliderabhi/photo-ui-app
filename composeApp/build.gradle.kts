@@ -39,6 +39,9 @@ kotlin {
             implementation(libs.media3.exoplayer.hls)
             implementation(libs.media3.ui)
             implementation(libs.zxing.core)
+            implementation(libs.credentials)
+            implementation(libs.credentials.play.services.auth)
+            implementation(libs.googleid)
         }
 
         commonMain.dependencies {
@@ -63,7 +66,21 @@ kotlin {
 
 android {
     namespace = "com.sevis.photos"
-    compileSdk = 35
+    compileSdk = 36
+
+    // The Google "Android" OAuth client (see Cloud Console) is registered
+    // against this keystore's SHA-1, not the debug keystore's — so a release
+    // build must be signed with it for Credential Manager Google sign-in to
+    // find any credentials. Passwords come from local.properties (gitignored),
+    // never committed in source.
+    signingConfigs {
+        create("release") {
+            storeFile = rootProject.file("../../../photos.jks")
+            storePassword = localProperties.getProperty("keystore.storePassword", "photos")
+            keyAlias = localProperties.getProperty("keystore.keyAlias", "key0")
+            keyPassword = localProperties.getProperty("keystore.keyPassword", "photos")
+        }
+    }
 
     defaultConfig {
         applicationId = "com.sevis.photos"
@@ -80,6 +97,12 @@ android {
         // protection rejects commits containing these directly in source.
         buildConfigField("String", "GOOGLE_TV_CLIENT_ID", "\"${localProperties.getProperty("google.tv.client.id", "")}\"")
         buildConfigField("String", "GOOGLE_TV_CLIENT_SECRET", "\"${localProperties.getProperty("google.tv.client.secret", "")}\"")
+        // Web-type OAuth client used as the "audience" for Credential Manager's
+        // Google ID token on mobile — a different client type than the TV one
+        // above, since Google only accepts device-authorization for TV/limited-
+        // input clients and only accepts Credential Manager's Google ID token
+        // requests for Web-type clients.
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${localProperties.getProperty("google.web.client.id", "")}\"")
     }
 
     // "mobile" is the existing phone/tablet app unchanged. "tv" reuses the exact
@@ -97,6 +120,12 @@ android {
             dimension = "platform"
             applicationIdSuffix = ".tv"
             versionNameSuffix = "-tv"
+        }
+    }
+
+    buildTypes {
+        getByName("release") {
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 

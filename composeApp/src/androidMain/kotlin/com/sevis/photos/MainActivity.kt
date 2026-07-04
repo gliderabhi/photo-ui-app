@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -23,6 +24,7 @@ import io.ktor.client.*
 import io.ktor.client.engine.android.*
 import io.ktor.client.plugins.api.*
 import io.ktor.client.plugins.contentnegotiation.*
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.json.Json
@@ -166,12 +168,14 @@ class MainActivity : ComponentActivity() {
                 onOpenUrl = { url ->
                     startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
                 },
-                // Email/password entry via a D-pad on-screen keyboard is painful on a
-                // TV, so that flavor gets QR/device-code Google sign-in instead —
-                // mobile keeps just the form above.
+                // TV gets the QR/device-code flow (typing a Gmail password via a
+                // D-pad on-screen keyboard is painful); mobile gets the standard
+                // native Google account picker via Credential Manager instead.
                 extraLoginContent = if (BuildConfig.FLAVOR == "tv") {
                     { onSuccess -> TvGoogleLoginContent(api = api, onLoginSuccess = onSuccess) }
-                } else null
+                } else {
+                    { onSuccess -> MobileGoogleLoginContent(api = api, onLoginSuccess = onSuccess) }
+                }
             )
         }
     }
@@ -217,6 +221,14 @@ class MainActivity : ComponentActivity() {
         // catchable, typed exception — producing a confusing raw
         // NoTransformationFoundException instead of something screens can handle.
         expectSuccess = true
+        // Without a timeout, a stalled connection (bad network, DNS hang, silently
+        // dropped packets) leaves the login screen's coroutine suspended forever —
+        // the spinner never stops and neither onSuccess nor onFailure ever fires.
+        install(HttpTimeout) {
+            requestTimeoutMillis = 15_000
+            connectTimeoutMillis = 10_000
+            socketTimeoutMillis = 15_000
+        }
         install(ContentNegotiation) {
             json(Json { ignoreUnknownKeys = true; isLenient = true })
         }

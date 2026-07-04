@@ -46,20 +46,33 @@ object GoogleDeviceAuth {
     )
 
     @Serializable
+    data class ErrorResponse(
+        val error: String? = null,
+        val error_description: String? = null
+    )
+
+    @Serializable
     data class TokenResponse(
         val access_token: String? = null,
         val id_token: String? = null,
         val error: String? = null
     )
 
-    suspend fun requestDeviceCode(): DeviceCodeResponse =
-        client.submitForm(
+    suspend fun requestDeviceCode(): DeviceCodeResponse {
+        check(CLIENT_ID.isNotBlank()) { "Google sign-in isn't configured (missing google.tv.client.id)" }
+        val response = client.submitForm(
             url = "https://oauth2.googleapis.com/device/code",
             formParameters = Parameters.build {
                 append("client_id", CLIENT_ID)
                 append("scope", "openid email profile")
             }
-        ).body()
+        )
+        if (!response.status.isSuccess()) {
+            val err: ErrorResponse = response.body()
+            error(err.error_description ?: err.error ?: "Google sign-in failed to start (${response.status})")
+        }
+        return response.body()
+    }
 
     /** Returns the id_token once the user completes sign-in on their phone, or
      *  null while still pending (caller should keep polling at [interval]).
