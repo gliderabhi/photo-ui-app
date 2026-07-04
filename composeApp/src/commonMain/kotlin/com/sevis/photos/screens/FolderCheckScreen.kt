@@ -11,9 +11,10 @@ import androidx.navigation.NavController
 import com.sevis.photos.AppState
 import com.sevis.photos.Routes
 import com.sevis.photos.data.PhotoApi
+import com.sevis.photos.data.isUnauthorized
 
 @Composable
-fun FolderCheckScreen(api: PhotoApi, navController: NavController) {
+fun FolderCheckScreen(api: PhotoApi, navController: NavController, onSessionExpired: () -> Unit) {
     LaunchedEffect(Unit) {
         runCatching { api.getFolderStatus() }
             .onSuccess { status ->
@@ -29,10 +30,21 @@ fun FolderCheckScreen(api: PhotoApi, navController: NavController) {
                     }
                 }
             }
-            .onFailure {
-                // On failure, go to folder unlock to retry
-                navController.navigate(Routes.FOLDER_UNLOCK) {
-                    popUpTo(Routes.FOLDER_CHECK) { inclusive = true }
+            .onFailure { e ->
+                if (e.isUnauthorized()) {
+                    // The session token itself is expired/invalid — sending the user to
+                    // Unlock Folder would just fail the same way on every retry, since
+                    // that screen's request carries the same bad token. Log out instead
+                    // so they get a clean re-login rather than a confusing request error.
+                    onSessionExpired()
+                    navController.navigate(Routes.LOGIN) {
+                        popUpTo(Routes.FOLDER_CHECK) { inclusive = true }
+                    }
+                } else {
+                    // Some other (e.g. network) failure — go to folder unlock to retry.
+                    navController.navigate(Routes.FOLDER_UNLOCK) {
+                        popUpTo(Routes.FOLDER_CHECK) { inclusive = true }
+                    }
                 }
             }
     }

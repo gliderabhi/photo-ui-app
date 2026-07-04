@@ -40,7 +40,8 @@ fun App(
     autoUploadEnabled: Boolean,
     onAutoUploadToggle: (Boolean) -> Unit,
     appDownloadUrl: String,
-    onOpenUrl: (String) -> Unit
+    onOpenUrl: (String) -> Unit,
+    extraLoginContent: (@Composable ((String) -> Unit) -> Unit)? = null
 ) {
     MaterialTheme {
         val navController = rememberNavController()
@@ -59,12 +60,22 @@ fun App(
                         navController.navigate(Routes.FOLDER_CHECK) {
                             popUpTo(Routes.LOGIN) { inclusive = true }
                         }
-                    }
+                    },
+                    extraLoginContent = extraLoginContent
                 )
             }
 
             composable(Routes.FOLDER_CHECK) {
-                FolderCheckScreen(api = api, navController = navController)
+                FolderCheckScreen(
+                    api = api,
+                    navController = navController,
+                    onSessionExpired = {
+                        AppState.token = null
+                        AppState.folderPassword = null
+                        onTokenChange(null)
+                        onFolderPasswordChange(null)
+                    }
+                )
             }
 
             composable(Routes.FOLDER_SETUP) {

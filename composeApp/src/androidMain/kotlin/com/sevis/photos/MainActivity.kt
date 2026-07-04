@@ -165,7 +165,13 @@ class MainActivity : ComponentActivity() {
                 appDownloadUrl = "${BuildConfig.API_BASE_URL}/photo-service/downloads/app-mobile.apk",
                 onOpenUrl = { url ->
                     startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                }
+                },
+                // Email/password entry via a D-pad on-screen keyboard is painful on a
+                // TV, so that flavor gets QR/device-code Google sign-in instead —
+                // mobile keeps just the form above.
+                extraLoginContent = if (BuildConfig.FLAVOR == "tv") {
+                    { onSuccess -> TvGoogleLoginContent(api = api, onLoginSuccess = onSuccess) }
+                } else null
             )
         }
     }
@@ -205,6 +211,12 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun buildKtorClient(): HttpClient = HttpClient(Android) {
+        // Without this, a non-2xx response (e.g. a 401 with an empty body when the
+        // gateway rejects an expired/missing JWT before it even reaches the backend)
+        // still falls through to .body<T>() deserialization instead of throwing a
+        // catchable, typed exception — producing a confusing raw
+        // NoTransformationFoundException instead of something screens can handle.
+        expectSuccess = true
         install(ContentNegotiation) {
             json(Json { ignoreUnknownKeys = true; isLenient = true })
         }

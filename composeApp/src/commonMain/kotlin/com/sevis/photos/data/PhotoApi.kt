@@ -3,9 +3,15 @@ package com.sevis.photos.data
 import com.sevis.photos.AppState
 import io.ktor.client.*
 import io.ktor.client.call.*
+import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.request.forms.*
 import io.ktor.http.*
+
+/** True if this came from a 401 response — e.g. an expired/missing JWT that the
+ *  gateway rejected outright (with an empty body) before reaching the backend. */
+fun Throwable.isUnauthorized(): Boolean =
+    this is ClientRequestException && response.status == HttpStatusCode.Unauthorized
 
 class PhotoApi(private val baseUrl: String, val client: HttpClient) {
 
@@ -26,6 +32,12 @@ class PhotoApi(private val baseUrl: String, val client: HttpClient) {
         client.post("$baseUrl/user-service/api/auth/login") {
             contentType(ContentType.Application.Json)
             setBody(mapOf("email" to email, "password" to password))
+        }.body()
+
+    suspend fun googleLogin(idToken: String, longLived: Boolean = false): AuthResponse =
+        client.post("$baseUrl/user-service/api/auth/google") {
+            contentType(ContentType.Application.Json)
+            setBody(mapOf("idToken" to idToken, "longLived" to longLived.toString()))
         }.body()
 
     suspend fun logout() {

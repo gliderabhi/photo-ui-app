@@ -19,12 +19,20 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sevis.photos.data.PhotoApi
+import com.sevis.photos.data.isUnauthorized
 import kotlinx.coroutines.launch
 
 @Composable
 fun LoginScreen(
     api: PhotoApi,
-    onLoginSuccess: (String) -> Unit
+    onLoginSuccess: (String) -> Unit,
+    // Only supplied on the TV flavor (see MainActivity) — email/password entry
+    // via a D-pad-driven on-screen keyboard is painful, so TV gets a QR/device-
+    // code Google sign-in slot instead. Null on mobile, where the form above is
+    // enough. Receives the same onLoginSuccess so a successful device-flow login
+    // navigates onward exactly like the form above does, instead of just
+    // silently setting AppState.token with no navigation follow-through.
+    extraLoginContent: (@Composable ((String) -> Unit) -> Unit)? = null
 ) {
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
@@ -42,7 +50,7 @@ fun LoginScreen(
             runCatching { api.login(email.trim(), password) }
                 .onSuccess { onLoginSuccess(it.token) }
                 .onFailure { e ->
-                    error = e.message?.substringAfter(": ") ?: "Invalid credentials"
+                    error = if (e.isUnauthorized()) "Invalid email or password" else "Couldn't reach the server. Please try again."
                     loading = false
                 }
         }
@@ -128,6 +136,8 @@ fun LoginScreen(
                         Text("Sign In", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
+
+                extraLoginContent?.invoke(onLoginSuccess)
             }
         }
     }

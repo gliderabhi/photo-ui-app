@@ -1,4 +1,10 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.util.Properties
+
+val localProperties = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
@@ -32,6 +38,7 @@ kotlin {
             implementation(libs.media3.exoplayer)
             implementation(libs.media3.exoplayer.hls)
             implementation(libs.media3.ui)
+            implementation(libs.zxing.core)
         }
 
         commonMain.dependencies {
@@ -69,6 +76,10 @@ android {
         // so it works from any real device on or off the home network — unlike
         // 10.0.2.2, which only resolves inside the Android emulator.
         buildConfigField("String", "API_BASE_URL", "\"https://photos.sevis.store\"")
+        // See local.properties (gitignored, not committed) — GitHub's push
+        // protection rejects commits containing these directly in source.
+        buildConfigField("String", "GOOGLE_TV_CLIENT_ID", "\"${localProperties.getProperty("google.tv.client.id", "")}\"")
+        buildConfigField("String", "GOOGLE_TV_CLIENT_SECRET", "\"${localProperties.getProperty("google.tv.client.secret", "")}\"")
     }
 
     // "mobile" is the existing phone/tablet app unchanged. "tv" reuses the exact

@@ -18,6 +18,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sevis.photos.data.PhotoApi
+import com.sevis.photos.data.isUnauthorized
 import kotlinx.coroutines.launch
 
 @Composable
@@ -41,7 +42,7 @@ fun FolderUnlockScreen(
             runCatching { api.verifyFolder(password) }
                 .onSuccess { onUnlockSuccess(password) }
                 .onFailure { e ->
-                    error = e.message?.substringAfter(": ") ?: "Incorrect password"
+                    error = if (e.isUnauthorized()) "Incorrect password" else "Couldn't reach the server. Please try again."
                     loading = false
                 }
         }
