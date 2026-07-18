@@ -143,10 +143,11 @@ class MainActivity : ComponentActivity() {
                         videoApi.uploadVideo(bytes, videoFile.name, videoFile.mimeType)
                     }
                 },
-                onPlayVideo = { url ->
+                onPlayVideo = { url, rawUrl ->
                     startActivity(
                         Intent(this, VideoPlayerActivity::class.java)
                             .putExtra("url", url)
+                            .putExtra("rawUrl", rawUrl)
                             .putExtra("token", AppState.token)
                     )
                 },
@@ -196,7 +197,10 @@ class MainActivity : ComponentActivity() {
                 // on-screen keyboard is painful, and the QR/device-code flow
                 // above is always available.
                 showCredentialsForm = BuildConfig.FLAVOR != "tv",
-                isTv = BuildConfig.FLAVOR == "tv"
+                isTv = BuildConfig.FLAVOR == "tv",
+                localLibraryContent = { com.sevis.photos.screens.LocalLibraryScreen() },
+                versionName = BuildConfig.VERSION_NAME,
+                versionCode = BuildConfig.VERSION_CODE
             )
         }
     }

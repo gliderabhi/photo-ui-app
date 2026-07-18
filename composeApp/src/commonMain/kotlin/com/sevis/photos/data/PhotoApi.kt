@@ -139,4 +139,10 @@ class PhotoApi(private val baseUrl: String, val client: HttpClient) {
         client.delete("$baseUrl/photo-service/api/albums/$albumId/photos/$photoId") {
             auth()
         }.body()
+
+    // ── App updates ───────────────────────────────────────────────
+
+    /** No auth — same publicly-served static file UpdateManager downloads the APK from. */
+    suspend fun getAppVersion(): AppVersionResponse =
+        client.get("$baseUrl/photo-service/downloads/version.json").body()
 }

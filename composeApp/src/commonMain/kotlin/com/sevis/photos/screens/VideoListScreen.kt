@@ -31,7 +31,9 @@ import kotlinx.coroutines.delay
 @Composable
 fun VideoListScreen(
     videoApi: VideoApi,
-    onPlayVideo: (String) -> Unit
+    // (playUrl, rawUrl) — rawUrl lets the player offer switching to the
+    // original untranscoded file even when HLS is also available.
+    onPlayVideo: (String, String?) -> Unit
 ) {
     var videos by remember { mutableStateOf<List<VideoResponse>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
@@ -80,10 +82,12 @@ fun VideoListScreen(
 }
 
 @Composable
-private fun VideoTile(video: VideoResponse, videoApi: VideoApi, onPlayVideo: (String) -> Unit) {
+private fun VideoTile(video: VideoResponse, videoApi: VideoApi, onPlayVideo: (String, String?) -> Unit) {
     // Prefer the finished HLS ladder once ready; while still encoding (or before
     // encoding starts), fall back to direct-playing the raw source so playback
-    // isn't blocked on the whole transcode pipeline finishing.
+    // isn't blocked on the whole transcode pipeline finishing. rawStreamUrl is
+    // passed along separately too, so the player can offer switching to it even
+    // once HLS is the primary source.
     val playableUrl = video.masterPlaylistUrl ?: video.rawStreamUrl
     val isPlayable = playableUrl != null
 
@@ -94,7 +98,9 @@ private fun VideoTile(video: VideoResponse, videoApi: VideoApi, onPlayVideo: (St
                 .clip(RoundedCornerShape(8.dp))
                 .background(Color(0xFFF1F3F4))
                 .clickable(enabled = isPlayable) {
-                    playableUrl?.let { onPlayVideo(videoApi.resolveUrl(it)) }
+                    playableUrl?.let {
+                        onPlayVideo(videoApi.resolveUrl(it), video.rawStreamUrl?.let { r -> videoApi.resolveUrl(r) })
+                    }
                 }
         ) {
             video.thumbnailUrl?.let {

@@ -36,7 +36,7 @@ fun App(
     uploadImage: suspend (ImageFile) -> Result<PhotoResponse>,
     videoApi: VideoApi,
     uploadVideo: suspend (VideoFile) -> Result<VideoResponse>,
-    onPlayVideo: (String) -> Unit,
+    onPlayVideo: (String, String?) -> Unit,
     autoUploadEnabled: Boolean,
     onAutoUploadToggle: (Boolean) -> Unit,
     updateProgress: Int?,
@@ -45,7 +45,10 @@ fun App(
     onUpdateApp: () -> Unit,
     extraLoginContent: (@Composable ((String) -> Unit) -> Unit)? = null,
     showCredentialsForm: Boolean = true,
-    isTv: Boolean = false
+    isTv: Boolean = false,
+    localLibraryContent: @Composable () -> Unit = {},
+    versionName: String = "",
+    versionCode: Int = 0
 ) {
     MaterialTheme {
         val navController = rememberNavController()
@@ -147,7 +150,10 @@ fun App(
                     updateError = updateError,
                     onDismissUpdateError = onDismissUpdateError,
                     onUpdateApp = onUpdateApp,
-                    isTv = isTv
+                    isTv = isTv,
+                    localLibraryContent = localLibraryContent,
+                    versionName = versionName,
+                    versionCode = versionCode
                 )
             }
         }

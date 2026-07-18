@@ -31,6 +31,7 @@ import org.jetbrains.compose.resources.painterResource
 private data class NavItem(val label: String, val selectedIcon: ImageVector, val unselectedIcon: ImageVector)
 
 private val NAV_ITEMS = listOf(
+    NavItem("Library", Icons.Filled.PhoneAndroid, Icons.Outlined.PhoneAndroid),
     NavItem("Gallery", Icons.Filled.PhotoLibrary, Icons.Outlined.PhotoLibrary),
     NavItem("Upload", Icons.Filled.CloudUpload, Icons.Outlined.CloudUpload),
     NavItem("Videos", Icons.Filled.VideoLibrary, Icons.Outlined.VideoLibrary),
@@ -50,7 +51,7 @@ fun ShellScreen(
     uploadImage: suspend (ImageFile) -> Result<PhotoResponse>,
     videoApi: VideoApi,
     uploadVideo: suspend (VideoFile) -> Result<VideoResponse>,
-    onPlayVideo: (String) -> Unit,
+    onPlayVideo: (String, String?) -> Unit,
     autoUploadEnabled: Boolean,
     onAutoUploadToggle: (Boolean) -> Unit,
     onFavoritesChange: (Set<Int>) -> Unit,
@@ -60,10 +61,14 @@ fun ShellScreen(
     updateError: String?,
     onDismissUpdateError: () -> Unit,
     onUpdateApp: () -> Unit,
-    isTv: Boolean = false
+    isTv: Boolean = false,
+    localLibraryContent: @Composable () -> Unit = {},
+    versionName: String = "",
+    versionCode: Int = 0
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
     var showMenu by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
 
     // TVs commonly overscan and crop a margin off every edge of the picture —
     // content sitting flush against the screen edge (the top bar's menu icon,
@@ -95,10 +100,9 @@ fun ShellScreen(
                                 modifier = Modifier.tvFocusRing()
                             )
                             DropdownMenuItem(
-                                text = { Text(if (updateProgress != null) "Updating… ${updateProgress}%" else "Update App") },
-                                leadingIcon = { Icon(Icons.Default.Android, contentDescription = null) },
-                                enabled = updateProgress == null,
-                                onClick = { showMenu = false; onUpdateApp() },
+                                text = { Text("Settings") },
+                                leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
+                                onClick = { showMenu = false; showSettings = true },
                                 modifier = Modifier.tvFocusRing()
                             )
                             DropdownMenuItem(
@@ -145,14 +149,15 @@ fun ShellScreen(
     ) { paddingValues ->
         Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
             when (selectedTab) {
-                0 -> GalleryScreen(
+                0 -> localLibraryContent()
+                1 -> GalleryScreen(
                     api = api,
                     baseUrl = baseUrl,
                     favoritesOnly = false,
                     onFavoritesChange = onFavoritesChange,
                     isTv = isTv
                 )
-                1 -> UploadScreen(
+                2 -> UploadScreen(
                     pickedImages = pickedImages,
                     pickedVideos = pickedVideos,
                     onPickMedia = onPickMedia,
@@ -162,12 +167,12 @@ fun ShellScreen(
                     autoUploadEnabled = autoUploadEnabled,
                     onAutoUploadToggle = onAutoUploadToggle
                 )
-                2 -> VideoListScreen(
+                3 -> VideoListScreen(
                     videoApi = videoApi,
                     onPlayVideo = onPlayVideo
                 )
-                3 -> AlbumsScreen(api = api, baseUrl = baseUrl)
-                4 -> GalleryScreen(
+                4 -> AlbumsScreen(api = api, baseUrl = baseUrl)
+                5 -> GalleryScreen(
                     api = api,
                     baseUrl = baseUrl,
                     favoritesOnly = true,
@@ -192,6 +197,19 @@ fun ShellScreen(
                     Text("Downloading… $updateProgress%", fontSize = 13.sp, color = Color(0xFF64748B))
                 }
             }
+        )
+    }
+
+    if (showSettings) {
+        SettingsScreen(
+            versionName = versionName,
+            versionCode = versionCode,
+            api = api,
+            autoUploadEnabled = autoUploadEnabled,
+            onAutoUploadToggle = onAutoUploadToggle,
+            updateProgress = updateProgress,
+            onUpdateApp = onUpdateApp,
+            onDismiss = { showSettings = false }
         )
     }
 

@@ -136,7 +136,11 @@ fun GalleryScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color(0xF0000000))
-                    .clickable { lightboxPhoto = null; showInfoPanel = false }
+                    // On TV this full-screen box would otherwise be a giant competing
+                    // focus target for D-pad 2D navigation, sitting "in between" the
+                    // top-bar buttons and the prev/next arrows. Dismissal there is via
+                    // the visible Close button instead.
+                    .clickable(enabled = !isTv) { lightboxPhoto = null; showInfoPanel = false }
             ) {
                 // Image
                 Box(
@@ -162,18 +166,43 @@ fun GalleryScreen(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(photo.originalFilename, color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp)
-                        IconButton(onClick = { toggleFavorite(photo) }) {
+                        IconButton(
+                            onClick = { toggleFavorite(photo) },
+                            modifier = if (isTv) Modifier.tvFocusRing(cornerRadius = 24.dp) else Modifier
+                        ) {
                             Icon(
                                 if (favorites.contains(photo.id)) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                                 contentDescription = "Favorite",
                                 tint = if (favorites.contains(photo.id)) Color(0xFFEA4335) else Color.White
                             )
                         }
-                        IconButton(onClick = { showInfoPanel = !showInfoPanel }) {
+                        // Delete lives here (not just in the grid) since TV hides the
+                        // grid's own per-cell delete button — see PhotoGrid isTv note.
+                        IconButton(
+                            onClick = {
+                                scope.launch {
+                                    runCatching { api.deletePhoto(photo.id) }.onSuccess {
+                                        reload()
+                                        lightboxPhoto = null
+                                        showInfoPanel = false
+                                    }
+                                }
+                            },
+                            modifier = if (isTv) Modifier.tvFocusRing(cornerRadius = 24.dp) else Modifier
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color.White)
+                        }
+                        IconButton(
+                            onClick = { showInfoPanel = !showInfoPanel },
+                            modifier = if (isTv) Modifier.tvFocusRing(cornerRadius = 24.dp) else Modifier
+                        ) {
                             Icon(Icons.Default.Info, contentDescription = "Info", tint = Color.White)
                         }
                     }
-                    IconButton(onClick = { lightboxPhoto = null; showInfoPanel = false }) {
+                    IconButton(
+                        onClick = { lightboxPhoto = null; showInfoPanel = false },
+                        modifier = if (isTv) Modifier.tvFocusRing(cornerRadius = 24.dp) else Modifier
+                    ) {
                         Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
                     }
                 }
@@ -182,7 +211,10 @@ fun GalleryScreen(
                 if (currentIndex > 0) {
                     IconButton(
                         onClick = { lightboxPhoto = flatPhotos[currentIndex - 1] },
-                        modifier = Modifier.align(Alignment.CenterStart).padding(start = 16.dp)
+                        modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .padding(start = 16.dp)
+                            .then(if (isTv) Modifier.tvFocusRing(cornerRadius = 24.dp) else Modifier)
                     ) {
                         Icon(
                             Icons.Default.ChevronLeft, contentDescription = "Previous",
@@ -195,7 +227,10 @@ fun GalleryScreen(
                 if (currentIndex < flatPhotos.size - 1) {
                     IconButton(
                         onClick = { lightboxPhoto = flatPhotos[currentIndex + 1] },
-                        modifier = Modifier.align(Alignment.CenterEnd).padding(end = if (showInfoPanel) 300.dp else 16.dp)
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .padding(end = if (showInfoPanel) 300.dp else 16.dp)
+                            .then(if (isTv) Modifier.tvFocusRing(cornerRadius = 24.dp) else Modifier)
                     ) {
                         Icon(
                             Icons.Default.ChevronRight, contentDescription = "Next",
@@ -428,7 +463,8 @@ fun GalleryScreen(
                                 scope.launch {
                                     runCatching { api.deletePhoto(photo.id) }.onSuccess { reload() }
                                 }
-                            }
+                            },
+                            isTv = isTv
                         )
                     }
                 }
@@ -447,7 +483,8 @@ private fun PhotoGrid(
     favorites: Set<Int>,
     onPhotoClick: (PhotoResponse) -> Unit,
     onFavoriteClick: (PhotoResponse) -> Unit,
-    onDeleteClick: (PhotoResponse) -> Unit
+    onDeleteClick: (PhotoResponse) -> Unit,
+    isTv: Boolean = false
 ) {
     val columns = 3
     val chunked = photos.chunked(columns)
@@ -461,6 +498,7 @@ private fun PhotoGrid(
                             .aspectRatio(1f)
                             .padding(2.dp)
                             .clip(RoundedCornerShape(8.dp))
+                            .then(if (isTv) Modifier.tvFocusRing(cornerRadius = 8.dp) else Modifier)
                             .clickable { onPhotoClick(photo) }
                     ) {
                         AsyncImage(
@@ -487,8 +525,12 @@ private fun PhotoGrid(
                             }
                         }
 
-                        // Favorite + Delete on non-bulk
-                        if (!bulkMode) {
+                        // Favorite + Delete on non-bulk. Skipped on TV: these are extra
+                        // focusable targets stacked on top of the cell's own clickable
+                        // area, which traps D-pad focus cycling between a cell and its
+                        // own nested buttons instead of moving to the next photo.
+                        // Favorite/delete are still reachable via the lightbox on TV.
+                        if (!bulkMode && !isTv) {
                             if (favorites.contains(photo.id)) {
                                 IconButton(
                                     onClick = { onFavoriteClick(photo) },
@@ -503,6 +545,15 @@ private fun PhotoGrid(
                             ) {
                                 SmallIconBtn(icon = Icons.Default.Delete, tint = Color.White) { onDeleteClick(photo) }
                             }
+                        } else if (isTv && favorites.contains(photo.id)) {
+                            // Non-interactive indicator only — still shows favorite state
+                            // without adding another focus target.
+                            Icon(
+                                Icons.Default.Favorite,
+                                contentDescription = null,
+                                tint = Color(0xFFEA4335),
+                                modifier = Modifier.align(Alignment.TopEnd).padding(6.dp).size(16.dp)
+                            )
                         }
                     }
                 }

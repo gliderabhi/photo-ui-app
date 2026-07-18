@@ -16,6 +16,10 @@ media3 = "1.4.1"
 zxing = "3.5.3"
 credentials = "1.3.0"
 googleid = "1.1.1"
+ksp = "2.0.21-1.0.28"
+room = "2.6.1"
+mlkit-face-detection = "16.1.7"
+exifinterface = "1.3.7"
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
@@ -23,6 +27,7 @@ kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref 
 compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "compose-multiplatform" }
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 
 [libraries]
 ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
@@ -49,3 +54,8 @@ zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
 credentials = { module = "androidx.credentials:credentials", version.ref = "credentials" }
 credentials-play-services-auth = { module = "androidx.credentials:credentials-play-services-auth", version.ref = "credentials" }
 googleid = { module = "com.google.android.libraries.identity.googleid:googleid", version.ref = "googleid" }
+room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
+room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
+room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
+mlkit-face-detection = { module = "com.google.mlkit:face-detection", version.ref = "mlkit-face-detection" }
+exifinterface = { module = "androidx.exifinterface:exifinterface", version.ref = "exifinterface" }

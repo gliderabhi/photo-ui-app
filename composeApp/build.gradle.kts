@@ -12,6 +12,7 @@ plugins {
     alias(libs.plugins.compose.multiplatform)
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.ksp)
 }
 
 kotlin {
@@ -42,6 +43,10 @@ kotlin {
             implementation(libs.credentials)
             implementation(libs.credentials.play.services.auth)
             implementation(libs.googleid)
+            implementation(libs.room.runtime)
+            implementation(libs.room.ktx)
+            implementation(libs.mlkit.face.detection)
+            implementation(libs.exifinterface)
         }
 
         commonMain.dependencies {
@@ -86,8 +91,8 @@ android {
         applicationId = "com.sevis.photos"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
         // https://photos.sevis.store proxies /user-service, /photo-service and
         // /stream-service straight through to the gateway (same as the web app),
         // so it works from any real device on or off the home network — unlike
@@ -137,4 +142,8 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+}
+
+dependencies {
+    add("kspAndroid", libs.room.compiler)
 }

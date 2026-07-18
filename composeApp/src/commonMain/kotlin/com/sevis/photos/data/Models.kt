@@ -33,6 +33,15 @@ data class AlbumResponse(
 @Serializable
 data class MessageResponse(val message: String)
 
+/** Served as a static file (downloads/version.json) alongside the APKs — lets the app
+ *  check whether a newer build is available without unconditionally re-downloading it. */
+@Serializable
+data class AppVersionResponse(
+    val versionCode: Int,
+    val versionName: String,
+    val releaseNotes: String? = null
+)
+
 @Serializable
 data class FolderStatusResponse(val hasFolder: Boolean)
 

@@ -44,7 +44,7 @@ import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.hls.HlsMediaSource
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.ui.PlayerView
 
@@ -65,6 +65,11 @@ class VideoPlayerActivity : ComponentActivity() {
 
         val url = intent.getStringExtra("url") ?: run { finish(); return }
         val token = intent.getStringExtra("token")
+        // Null when HLS isn't available at all yet, or equal to `url` when HLS
+        // isn't ready and raw is already the primary source — either way, only
+        // offer "Raw (Original)" as a distinct switchable option when it
+        // actually differs from what's already playing.
+        val rawUrl = intent.getStringExtra("rawUrl")?.takeIf { it != url }
 
         setContent {
             MaterialTheme {
@@ -75,7 +80,10 @@ class VideoPlayerActivity : ComponentActivity() {
                                 setDefaultRequestProperties(mapOf("Authorization" to "Bearer $token"))
                             }
                         }
-                        val mediaSourceFactory = HlsMediaSource.Factory(dataSourceFactory)
+                        // Generic factory (not forced to HlsMediaSource) so the same player
+                        // can also play a plain progressive MP4 when the user switches to
+                        // the "Raw (Original)" option below.
+                        val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
                         // Force the highest available rendition up front instead of letting
                         // ExoPlayer's adaptive selector ramp up from its conservative default —
                         // on a local network bandwidth isn't the constraint ABR assumes. Set once
@@ -98,6 +106,29 @@ class VideoPlayerActivity : ComponentActivity() {
                     var qualities by remember { mutableStateOf<List<QualityOption>>(emptyList()) }
                     var currentQualityLabel by remember { mutableStateOf("Auto") }
                     var showQualityMenu by remember { mutableStateOf(false) }
+                    var isPlayingRaw by remember { mutableStateOf(false) }
+
+                    fun playRaw() {
+                        if (rawUrl == null) return
+                        val position = player.currentPosition
+                        player.setMediaItem(MediaItem.fromUri(rawUrl))
+                        player.prepare()
+                        player.seekTo(position)
+                        player.playWhenReady = true
+                        isPlayingRaw = true
+                        currentQualityLabel = "Raw"
+                        showQualityMenu = false
+                    }
+
+                    fun playHls() {
+                        if (!isPlayingRaw) return
+                        val position = player.currentPosition
+                        player.setMediaItem(MediaItem.fromUri(url))
+                        player.prepare()
+                        player.seekTo(position)
+                        player.playWhenReady = true
+                        isPlayingRaw = false
+                    }
 
                     DisposableEffect(Unit) {
                         val listener = object : Player.Listener {
@@ -134,13 +165,23 @@ class VideoPlayerActivity : ComponentActivity() {
                         AndroidView(
                             factory = { ctx ->
                                 PlayerView(ctx).apply {
+                                    val self = this
                                     this.player = player
                                     isFocusable = true
                                     isFocusableInTouchMode = true
-                                    // D-pad Up hands focus off to the Settings/quality button —
-                                    // there's no other way to reach it since it lives outside
-                                    // the native view's own key handling.
                                     setOnKeyListener { _, keyCode, event ->
+                                        // Any D-pad press should surface the controller — once
+                                        // playback starts, Media3 auto-hides it after a timeout,
+                                        // and relying solely on the view's own internal show-on-
+                                        // key logic turned out not to be reliable here (controls
+                                        // stayed hidden/unnavigable once playing), so force it
+                                        // explicitly rather than trust that path alone.
+                                        if (event.action == android.view.KeyEvent.ACTION_DOWN) {
+                                            self.showController()
+                                        }
+                                        // D-pad Up hands focus off to the Settings/quality button —
+                                        // there's no other way to reach it since it lives outside
+                                        // the native view's own key handling.
                                         if (event.action == android.view.KeyEvent.ACTION_UP &&
                                             keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP &&
                                             qualities.isNotEmpty()
@@ -157,13 +198,24 @@ class VideoPlayerActivity : ComponentActivity() {
                                             false
                                         }
                                     }
-                                    requestFocus()
+                                    // Calling requestFocus() here (before the view is attached to
+                                    // a window) is a silent no-op — AndroidView's factory builds
+                                    // the view detached and Compose attaches it afterward. That
+                                    // meant PlayerView never actually held Android focus, so once
+                                    // the controller auto-hid during playback, D-pad input had
+                                    // nowhere to go. Request it once attachment actually happens.
+                                    addOnAttachStateChangeListener(object : android.view.View.OnAttachStateChangeListener {
+                                        override fun onViewAttachedToWindow(v: android.view.View) {
+                                            v.requestFocus()
+                                        }
+                                        override fun onViewDetachedFromWindow(v: android.view.View) {}
+                                    })
                                 }.also { playerViewRef.value = it }
                             },
                             modifier = Modifier.fillMaxSize()
                         )
 
-                        if (qualities.isNotEmpty()) {
+                        if (qualities.isNotEmpty() || rawUrl != null) {
                             Box(modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)) {
                                 IconButton(
                                     onClick = { showQualityMenu = true },
@@ -186,30 +238,41 @@ class VideoPlayerActivity : ComponentActivity() {
                                     onDismissRequest = { showQualityMenu = false },
                                     modifier = Modifier.background(Color(0xFF1F1F1F), RoundedCornerShape(10.dp))
                                 ) {
-                                    DropdownMenuItem(
-                                        text = { Text(if (currentQualityLabel == "Auto") "✓ Auto" else "Auto", color = Color.White) },
-                                        onClick = {
-                                            player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-                                                .clearOverridesOfType(C.TRACK_TYPE_VIDEO)
-                                                .build()
-                                            currentQualityLabel = "Auto"
-                                            showQualityMenu = false
-                                        },
-                                        modifier = Modifier.tvFocusRing()
-                                    )
-                                    qualities.forEach { q ->
-                                        val label = "${q.height}p"
+                                    if (qualities.isNotEmpty()) {
                                         DropdownMenuItem(
-                                            text = { Text(if (currentQualityLabel == label) "✓ $label" else label, color = Color.White) },
+                                            text = { Text(if (currentQualityLabel == "Auto") "✓ Auto" else "Auto", color = Color.White) },
                                             onClick = {
+                                                playHls()
                                                 player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-                                                    .setOverrideForType(
-                                                        TrackSelectionOverride(q.group.mediaTrackGroup, q.trackIndexInGroup)
-                                                    )
+                                                    .clearOverridesOfType(C.TRACK_TYPE_VIDEO)
                                                     .build()
-                                                currentQualityLabel = label
+                                                currentQualityLabel = "Auto"
                                                 showQualityMenu = false
                                             },
+                                            modifier = Modifier.tvFocusRing()
+                                        )
+                                        qualities.forEach { q ->
+                                            val label = "${q.height}p"
+                                            DropdownMenuItem(
+                                                text = { Text(if (currentQualityLabel == label) "✓ $label" else label, color = Color.White) },
+                                                onClick = {
+                                                    playHls()
+                                                    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                                                        .setOverrideForType(
+                                                            TrackSelectionOverride(q.group.mediaTrackGroup, q.trackIndexInGroup)
+                                                        )
+                                                        .build()
+                                                    currentQualityLabel = label
+                                                    showQualityMenu = false
+                                                },
+                                                modifier = Modifier.tvFocusRing()
+                                            )
+                                        }
+                                    }
+                                    if (rawUrl != null) {
+                                        DropdownMenuItem(
+                                            text = { Text(if (isPlayingRaw) "✓ Raw (Original)" else "Raw (Original)", color = Color.White) },
+                                            onClick = { playRaw() },
                                             modifier = Modifier.tvFocusRing()
                                         )
                                     }
