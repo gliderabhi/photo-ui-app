@@ -149,7 +149,7 @@ fun LoginScreen(
                         enabled = !loading && email.isNotBlank() && password.isNotBlank(),
                         modifier = Modifier.fillMaxWidth().height(50.dp).tvFocusRing(),
                         shape = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0A84FF))
                     ) {
                         if (loading) {
                             CircularProgressIndicator(

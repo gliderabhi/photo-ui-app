@@ -154,7 +154,7 @@ fun FolderSetupScreen(
                     enabled = canSubmit,
                     modifier = Modifier.fillMaxWidth().height(50.dp),
                     shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0A84FF))
                 ) {
                     if (loading) CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
                     else Text(if (hasFolder) "Update Password" else "Set Password", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)

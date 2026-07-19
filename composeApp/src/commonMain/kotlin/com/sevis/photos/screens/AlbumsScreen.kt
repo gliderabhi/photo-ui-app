@@ -1,5 +1,6 @@
 package com.sevis.photos.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -60,7 +61,7 @@ fun AlbumsScreen(api: PhotoApi, baseUrl: String) {
         return
     }
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+    Column(modifier = Modifier.fillMaxSize().background(com.sevis.photos.ui.GlassPageBackground).padding(16.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -71,10 +72,17 @@ fun AlbumsScreen(api: PhotoApi, baseUrl: String) {
                 OutlinedTextField(
                     value = newAlbumName,
                     onValueChange = { newAlbumName = it },
-                    placeholder = { Text("New album name…") },
+                    placeholder = { Text("New album name…", fontSize = 13.sp) },
+                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp),
                     singleLine = true,
                     shape = RoundedCornerShape(24.dp),
-                    modifier = Modifier.width(180.dp),
+                    modifier = Modifier.width(180.dp).height(44.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        unfocusedBorderColor = Color.Transparent,
+                        focusedBorderColor = Color.Transparent,
+                        unfocusedContainerColor = Color.White.copy(alpha = 0.6f),
+                        focusedContainerColor = Color.White.copy(alpha = 0.85f)
+                    ),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(onDone = {
                         if (newAlbumName.isNotBlank()) {
@@ -96,7 +104,7 @@ fun AlbumsScreen(api: PhotoApi, baseUrl: String) {
                         focusManager.clearFocus()
                     },
                     enabled = newAlbumName.isNotBlank(),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1A73E8)),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0A84FF)),
                     shape = RoundedCornerShape(24.dp)
                 ) { Text("Create") }
             }

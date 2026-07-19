@@ -84,7 +84,7 @@ fun SettingsScreen(
                     // App version / update card
                     SettingsCard {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Icon(Icons.Default.SystemUpdateAlt, contentDescription = null, tint = Color(0xFF2563EB))
+                            Icon(Icons.Default.SystemUpdateAlt, contentDescription = null, tint = Color(0xFF0A84FF))
                             Column {
                                 Text("App version", fontWeight = FontWeight.Medium, fontSize = 15.sp)
                                 Text("v$versionName ($versionCode)", fontSize = 13.sp, color = Color(0xFF5F6368))
@@ -106,7 +106,7 @@ fun SettingsScreen(
                             }
                             is UpdateCheckState.Available -> {
                                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    Text("Update available: v${state.versionName}", fontSize = 13.sp, color = Color(0xFF2563EB), fontWeight = FontWeight.Medium)
+                                    Text("Update available: v${state.versionName}", fontSize = 13.sp, color = Color(0xFF0A84FF), fontWeight = FontWeight.Medium)
                                     state.notes?.let { Text(it, fontSize = 12.sp, color = Color(0xFF5F6368)) }
                                 }
                             }
@@ -127,7 +127,7 @@ fun SettingsScreen(
                                 Button(
                                     onClick = onUpdateApp,
                                     enabled = updateProgress == null,
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0A84FF))
                                 ) { Text(if (updateProgress != null) "Updating… ${updateProgress}%" else "Update Now") }
                             }
                         }
@@ -141,7 +141,7 @@ fun SettingsScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                Icon(Icons.Default.CloudUpload, contentDescription = null, tint = Color(0xFF2563EB))
+                                Icon(Icons.Default.CloudUpload, contentDescription = null, tint = Color(0xFF0A84FF))
                                 Column {
                                     Text("Auto-upload to server", fontWeight = FontWeight.Medium, fontSize = 15.sp)
                                     Text(

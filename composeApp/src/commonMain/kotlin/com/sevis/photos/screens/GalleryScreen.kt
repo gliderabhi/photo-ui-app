@@ -326,10 +326,9 @@ fun GalleryScreen(
         )
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(modifier = Modifier.fillMaxSize().background(com.sevis.photos.ui.GlassPageBackground)) {
         // Top bar: search + actions
-        Surface(shadowElevation = 1.dp, color = Color(0xFFF4F7FC)) {
-            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     // On TV, D-pad focus landing on a text field is not the same as
                     // "the user wants to type" — Compose shows the soft keyboard on
@@ -367,6 +366,12 @@ fun GalleryScreen(
                             },
                         singleLine = true,
                         shape = RoundedCornerShape(22.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            unfocusedBorderColor = Color.Transparent,
+                            focusedBorderColor = Color.Transparent,
+                            unfocusedContainerColor = Color.White.copy(alpha = 0.6f),
+                            focusedContainerColor = Color.White.copy(alpha = 0.85f)
+                        ),
                         leadingIcon = {
                             Icon(
                                 Icons.Default.Search,
@@ -375,31 +380,35 @@ fun GalleryScreen(
                             )
                         }
                     )
-                    Button(
-                        onClick = { bulkMode = !bulkMode; selectedIds = emptySet() },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (bulkMode) Color(0xFFE8F0FE) else Color(0xFFF1F3F4),
-                            contentColor = if (bulkMode) Color(0xFF1A73E8) else Color(0xFF5F6368)
-                        ),
-                        shape = RoundedCornerShape(24.dp)
-                    ) { Text(if (bulkMode) "Cancel" else "Select") }
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(if (bulkMode) Color(0xFF0A84FF).copy(alpha = 0.14f) else Color.White.copy(alpha = 0.6f))
+                            .clickable { bulkMode = !bulkMode; selectedIds = emptySet() }
+                            .padding(horizontal = 16.dp, vertical = 11.dp)
+                    ) {
+                        Text(
+                            if (bulkMode) "Cancel" else "Select",
+                            fontSize = 13.sp,
+                            color = if (bulkMode) Color(0xFF0A84FF) else Color(0xFF5F6368)
+                        )
+                    }
                 }
-            }
         }
 
         // Bulk action bar
         if (bulkMode && selectedIds.isNotEmpty()) {
-            Surface(color = Color(0xFFE8F0FE)) {
+            Surface(color = Color(0xFF0A84FF).copy(alpha = 0.1f)) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("${selectedIds.size} selected", color = Color(0xFF1A73E8), fontWeight = FontWeight.Medium)
+                    Text("${selectedIds.size} selected", color = Color(0xFF0A84FF), fontWeight = FontWeight.Medium)
                     Spacer(Modifier.weight(1f))
                     Button(
                         onClick = { showAlbumPicker = true },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1A73E8))
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0A84FF))
                     ) { Text("Add to Album") }
                     Button(
                         onClick = {
@@ -488,17 +497,15 @@ private fun PhotoGrid(
 ) {
     val columns = 3
     val chunked = photos.chunked(columns)
-    Column(modifier = Modifier.padding(horizontal = 8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(1.5.dp)) {
         chunked.forEach { row ->
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(1.5.dp)) {
                 row.forEach { photo ->
                     Box(
                         modifier = Modifier
                             .weight(1f)
                             .aspectRatio(1f)
-                            .padding(2.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .then(if (isTv) Modifier.tvFocusRing(cornerRadius = 8.dp) else Modifier)
+                            .then(if (isTv) Modifier.tvFocusRing(cornerRadius = 4.dp) else Modifier)
                             .clickable { onPhotoClick(photo) }
                     ) {
                         AsyncImage(
@@ -515,7 +522,7 @@ private fun PhotoGrid(
                                     .padding(6.dp)
                                     .size(22.dp)
                                     .clip(CircleShape)
-                                    .background(if (selectedIds.contains(photo.id)) Color(0xFF1A73E8) else Color.Black.copy(alpha = 0.35f))
+                                    .background(if (selectedIds.contains(photo.id)) Color(0xFF0A84FF) else Color.Black.copy(alpha = 0.35f))
                                     .align(Alignment.TopStart),
                                 contentAlignment = Alignment.Center
                             ) {

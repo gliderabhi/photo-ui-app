@@ -18,7 +18,12 @@ data class LocalMediaEntity(
     val dateTakenMillis: Long,
     val latitude: Double? = null,
     val longitude: Double? = null,
-    val faceScanned: Boolean = false
+    val faceScanned: Boolean = false,
+    /** Reverse-geocoded label (e.g. "Varanasi"), resolved lazily by LocalScanWorker. */
+    val placeName: String? = null,
+    val placeResolved: Boolean = false,
+    /** MediaStore folder name (e.g. "Camera", "WhatsApp Images"), used for Albums grouping. */
+    val bucketName: String? = null
 )
 
 @Entity(

@@ -20,7 +20,9 @@ data class LocalLibraryImage(
     val name: String,
     val dateTakenMillis: Long,
     val latitude: Double?,
-    val longitude: Double?
+    val longitude: Double?,
+    /** The MediaStore folder it lives in (e.g. "Camera", "WhatsApp Images") — used for Albums grouping. */
+    val bucketName: String?
 )
 
 data class MediaVideo(
@@ -130,7 +132,8 @@ object MediaStoreHelper {
             MediaStore.Images.Media._ID,
             MediaStore.Images.Media.DISPLAY_NAME,
             MediaStore.Images.Media.DATE_TAKEN,
-            MediaStore.Images.Media.DATE_ADDED
+            MediaStore.Images.Media.DATE_ADDED,
+            MediaStore.Images.Media.BUCKET_DISPLAY_NAME
         )
         val sortOrder = "${MediaStore.Images.Media.DATE_TAKEN} DESC"
 
@@ -145,6 +148,7 @@ object MediaStoreHelper {
             val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DISPLAY_NAME)
             val dateTakenCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATE_TAKEN)
             val dateAddedCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATE_ADDED)
+            val bucketCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.BUCKET_DISPLAY_NAME)
 
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(idCol)
@@ -159,7 +163,8 @@ object MediaStoreHelper {
                         name = cursor.getString(nameCol) ?: "image_$id.jpg",
                         dateTakenMillis = dateTaken,
                         latitude = latLon?.first,
-                        longitude = latLon?.second
+                        longitude = latLon?.second,
+                        bucketName = cursor.getString(bucketCol)
                     )
                 )
             }

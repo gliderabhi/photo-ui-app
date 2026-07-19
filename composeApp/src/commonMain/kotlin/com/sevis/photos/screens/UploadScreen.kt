@@ -158,7 +158,7 @@ fun UploadScreen(
                 Switch(
                     checked = autoUploadEnabled,
                     onCheckedChange = onAutoUploadToggle,
-                    colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Color(0xFF1A73E8))
+                    colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Color(0xFF0A84FF))
                 )
             }
         }
@@ -199,7 +199,7 @@ fun UploadScreen(
                     modifier = Modifier.size(56.dp).clip(CircleShape).background(Color(0xFFE8F0FE)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, tint = Color(0xFF1A73E8), modifier = Modifier.size(28.dp))
+                    Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, tint = Color(0xFF0A84FF), modifier = Modifier.size(28.dp))
                 }
                 Text("Select from Gallery", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Color(0xFF202124))
                 Text("Photos: PNG, JPG, WEBP · Videos: MP4, MOV, MKV", fontSize = 12.sp, color = Color(0xFF9AA0A6))
@@ -230,7 +230,7 @@ fun UploadScreen(
                             Button(
                                 onClick = ::uploadAll,
                                 enabled = !uploading && pendingCount > 0,
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1A73E8))
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0A84FF))
                             ) {
                                 if (uploading) {
                                     CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
@@ -295,7 +295,7 @@ private fun UploadThumbnail(item: MediaUploadItem) {
                 contentAlignment = Alignment.Center
             ) {
                 Box(
-                    modifier = Modifier.size(32.dp).clip(CircleShape).background(Color(0xFF1A73E8)),
+                    modifier = Modifier.size(32.dp).clip(CircleShape).background(Color(0xFF0A84FF)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))

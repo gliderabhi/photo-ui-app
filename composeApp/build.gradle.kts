@@ -47,6 +47,8 @@ kotlin {
             implementation(libs.room.ktx)
             implementation(libs.mlkit.face.detection)
             implementation(libs.exifinterface)
+            implementation(libs.lifecycle.process)
+            implementation(libs.onnxruntime.android)
         }
 
         commonMain.dependencies {
@@ -58,6 +60,10 @@ kotlin {
             implementation(compose.components.resources)
             implementation(compose.components.uiToolingPreview)
             implementation(libs.navigation.compose)
+            // Android-only API (BackHandler), but androidTarget is the only real
+            // compiled target in this project today — if a non-Android target is
+            // ever added, ShellScreen's BackHandler usage will need expect/actual.
+            implementation(libs.activity.compose)
             implementation(libs.ktor.client.core)
             implementation(libs.ktor.client.content.negotiation)
             implementation(libs.ktor.serialization.kotlinx.json)
@@ -136,6 +142,12 @@ android {
 
     buildFeatures {
         buildConfig = true
+    }
+
+    // The bundled sface.onnx (see assets/) is already dense binary weight data,
+    // not worth re-compressing into the APK's zip.
+    androidResources {
+        noCompress += "onnx"
     }
 
     compileOptions {

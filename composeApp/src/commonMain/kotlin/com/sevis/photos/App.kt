@@ -1,11 +1,28 @@
 package com.sevis.photos
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.*
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.*
 import com.sevis.photos.data.*
 import com.sevis.photos.screens.*
+import com.sevis.photos.ui.GlassColors
+
+// Without a custom scheme, MaterialTheme falls back to Material 3's stock
+// purple defaults — every default-styled widget (dialogs, buttons, dropdown
+// menus, progress indicators) clashed with the hand-styled Glass surfaces
+// elsewhere, reading as "no theme at all" rather than one consistent look.
+private val PhotosColorScheme = lightColorScheme(
+    primary = GlassColors.AccentBlue,
+    onPrimary = androidx.compose.ui.graphics.Color.White,
+    secondary = GlassColors.AccentPurple,
+    background = GlassColors.PageTop,
+    surface = androidx.compose.ui.graphics.Color.White,
+    onBackground = GlassColors.TextPrimary,
+    onSurface = GlassColors.TextPrimary,
+    error = GlassColors.AccentRed
+)
 
 object Routes {
     const val LOGIN = "login"
@@ -46,11 +63,15 @@ fun App(
     extraLoginContent: (@Composable ((String) -> Unit) -> Unit)? = null,
     showCredentialsForm: Boolean = true,
     isTv: Boolean = false,
-    localLibraryContent: @Composable () -> Unit = {},
+    localLibraryContent: @Composable (groupByPlace: Boolean) -> Unit = {},
+    localAlbumsContent: @Composable (onBack: () -> Unit, onAlbumClick: (String) -> Unit) -> Unit = { _, _ -> },
+    localAlbumPhotosContent: @Composable (bucketName: String, onBack: () -> Unit) -> Unit = { _, _ -> },
+    localPeopleContent: @Composable (onBack: () -> Unit, onPersonClick: (Long, String?) -> Unit) -> Unit = { _, _ -> },
+    localPersonPhotosContent: @Composable (personId: Long, displayName: String?, onBack: () -> Unit) -> Unit = { _, _, _ -> },
     versionName: String = "",
     versionCode: Int = 0
 ) {
-    MaterialTheme {
+    MaterialTheme(colorScheme = PhotosColorScheme) {
         val navController = rememberNavController()
 
         NavHost(
@@ -152,6 +173,10 @@ fun App(
                     onUpdateApp = onUpdateApp,
                     isTv = isTv,
                     localLibraryContent = localLibraryContent,
+                    localAlbumsContent = localAlbumsContent,
+                    localAlbumPhotosContent = localAlbumPhotosContent,
+                    localPeopleContent = localPeopleContent,
+                    localPersonPhotosContent = localPersonPhotosContent,
                     versionName = versionName,
                     versionCode = versionCode
                 )

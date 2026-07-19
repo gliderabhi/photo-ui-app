@@ -11,9 +11,11 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.*
+import androidx.core.view.WindowCompat
 import androidx.media3.common.util.UnstableApi
 import com.sevis.photos.autoupload.AutoUploadScheduler
 import com.sevis.photos.data.ImageFile
@@ -38,6 +40,16 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Without this, the system reserves the status/nav bar area *and* our
+        // own statusBarsPadding()/navigationBarsPadding() calls add their own
+        // inset on top of that — a double gap that read as "too much padding"
+        // and left the status bar a plain unstyled system strip instead of
+        // part of the glass background. Edge-to-edge lets our content draw
+        // underneath the system bars, with our existing insets doing the
+        // (now single) correct inset.
+        enableEdgeToEdge()
+        WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = true
 
         prefs = getSharedPreferences("photos_prefs", MODE_PRIVATE)
 
@@ -198,7 +210,19 @@ class MainActivity : ComponentActivity() {
                 // above is always available.
                 showCredentialsForm = BuildConfig.FLAVOR != "tv",
                 isTv = BuildConfig.FLAVOR == "tv",
-                localLibraryContent = { com.sevis.photos.screens.LocalLibraryScreen() },
+                localLibraryContent = { groupByPlace -> com.sevis.photos.screens.LocalLibraryScreen(groupByPlace) },
+                localAlbumsContent = { onBack, onAlbumClick ->
+                    com.sevis.photos.screens.LocalAlbumsScreen(onBack = onBack, onAlbumClick = onAlbumClick)
+                },
+                localAlbumPhotosContent = { bucketName, onBack ->
+                    com.sevis.photos.screens.LocalAlbumPhotosScreen(bucketName = bucketName, onBack = onBack)
+                },
+                localPeopleContent = { onBack, onPersonClick ->
+                    com.sevis.photos.screens.FacesScreen(onBack = onBack, onPersonClick = onPersonClick)
+                },
+                localPersonPhotosContent = { personId, displayName, onBack ->
+                    com.sevis.photos.screens.PersonPhotosScreen(personId = personId, displayName = displayName, onBack = onBack)
+                },
                 versionName = BuildConfig.VERSION_NAME,
                 versionCode = BuildConfig.VERSION_CODE
             )

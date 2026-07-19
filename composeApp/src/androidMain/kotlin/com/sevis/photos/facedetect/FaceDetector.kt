@@ -2,6 +2,7 @@ package com.sevis.photos.facedetect
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.PointF
 import android.graphics.Rect
 import android.net.Uri
 import androidx.core.graphics.scale
@@ -12,7 +13,14 @@ import com.google.mlkit.vision.face.FaceDetectorOptions
 import java.io.File
 import java.io.FileOutputStream
 
-data class DetectedFace(val bounds: Rect, val thumbnailPath: String)
+data class DetectedFace(
+    val bounds: Rect,
+    val thumbnailPath: String,
+    /** ML Kit FaceLandmark.LandmarkType -> position, in the same bitmap coordinate space as [bounds]. */
+    val landmarks: Map<Int, PointF>,
+    /** SFace embedding (see FaceEmbedder) — null if landmarks weren't sufficient to align the face. */
+    val embedding: FloatArray?
+)
 
 /**
  * On-device face detection via ML Kit's bundled face-detection model — no network calls,
@@ -20,10 +28,18 @@ data class DetectedFace(val bounds: Rect, val thumbnailPath: String)
  */
 object FaceDetector {
 
+    // Extra margin beyond the tight ML Kit bounding box for the *saved thumbnail* only
+    // (nicer-looking person avatars that include some neck/ears/hair, not just a tight
+    // face crop) — has no effect on matching, which uses landmark geometry instead.
+    private const val PAD_SIDES = 0.25f
+    private const val PAD_TOP = 0.35f
+    private const val PAD_BOTTOM = 0.45f
+
     private val detector by lazy {
         FaceDetection.getClient(
             FaceDetectorOptions.Builder()
                 .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
+                .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_ALL)
                 .build()
         )
     }
@@ -35,17 +51,26 @@ object FaceDetector {
         val faces = Tasks.await(detector.process(inputImage))
         return faces.mapIndexedNotNull { index, face ->
             val bounds = face.boundingBox
-            val clamped = Rect(
-                bounds.left.coerceIn(0, bitmap.width),
-                bounds.top.coerceIn(0, bitmap.height),
-                bounds.right.coerceIn(0, bitmap.width),
-                bounds.bottom.coerceIn(0, bitmap.height)
-            )
-            if (clamped.width() <= 0 || clamped.height() <= 0) return@mapIndexedNotNull null
-            val crop = Bitmap.createBitmap(bitmap, clamped.left, clamped.top, clamped.width(), clamped.height())
+            val padded = paddedBounds(bounds, bitmap.width, bitmap.height)
+            if (padded.width() <= 0 || padded.height() <= 0) return@mapIndexedNotNull null
+            val crop = Bitmap.createBitmap(bitmap, padded.left, padded.top, padded.width(), padded.height())
             val path = saveThumbnail(context, mediaId, index, crop)
-            DetectedFace(clamped, path)
+            val landmarks = face.allLandmarks.associate { it.landmarkType to it.position }
+            val embedding = FaceEmbedder.embed(context, bitmap, landmarks)
+            DetectedFace(padded, path, landmarks, embedding)
         }
+    }
+
+    private fun paddedBounds(bounds: Rect, maxWidth: Int, maxHeight: Int): Rect {
+        val padX = (bounds.width() * PAD_SIDES).toInt()
+        val padTop = (bounds.height() * PAD_TOP).toInt()
+        val padBottom = (bounds.height() * PAD_BOTTOM).toInt()
+        return Rect(
+            (bounds.left - padX).coerceIn(0, maxWidth),
+            (bounds.top - padTop).coerceIn(0, maxHeight),
+            (bounds.right + padX).coerceIn(0, maxWidth),
+            (bounds.bottom + padBottom).coerceIn(0, maxHeight)
+        )
     }
 
     private fun loadDownsampledBitmap(context: Context, uri: Uri): Bitmap? {
