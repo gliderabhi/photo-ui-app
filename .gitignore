@@ -18,6 +18,13 @@ captures/
 
 # Kotlin
 *.class
+.kotlin/
+
+# iOS — iosApp.xcodeproj is generated from project.yml by XcodeGen
+# (run `xcodegen generate` inside iosApp/ before opening in Xcode).
+iosApp/*.xcodeproj/
+iosApp/build/
+xcuserdata/
 
 # OS
 .DS_Store

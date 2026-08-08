@@ -1,6 +1,5 @@
 package com.sevis.photos.screens
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
@@ -16,6 +15,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.sevis.photos.BackHandler
 import com.sevis.photos.data.ImageFile
 import com.sevis.photos.data.PhotoApi
 import com.sevis.photos.data.PhotoResponse
@@ -116,13 +117,17 @@ fun ShellScreen(
     var showSettings by remember { mutableStateOf(false) }
     var fabExpanded by remember { mutableStateOf(false) }
 
-    BackHandler(enabled = pane != AppPane.Gallery) {
+    val goBack: () -> Unit = {
         pane = when (val p = pane) {
             is AppPane.PersonPhotos -> AppPane.People
             is AppPane.AlbumPhotos -> AppPane.Albums
             else -> AppPane.Gallery
         }
     }
+
+    // Real system back gesture/button on Android; no-op on iOS, where the top
+    // bar's visible back chevron below is the only way back.
+    BackHandler(enabled = pane != AppPane.Gallery, onBack = goBack)
 
     // TVs commonly overscan and crop a margin off every edge of the picture —
     // content sitting flush against the screen edge (the top bar's menu icon,
@@ -137,7 +142,8 @@ fun ShellScreen(
                 onMenuToggle = { showMenu = it },
                 onLockFolder = onLockFolder,
                 onShowSettings = { showSettings = true },
-                onLogout = onLogout
+                onLogout = onLogout,
+                onBack = if (pane != AppPane.Gallery) goBack else null
             )
         },
         containerColor = Color.Transparent
@@ -258,7 +264,8 @@ private fun GlassTopBar(
     onMenuToggle: (Boolean) -> Unit,
     onLockFolder: () -> Unit,
     onShowSettings: () -> Unit,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    onBack: (() -> Unit)? = null
 ) {
     Box(
         modifier = Modifier
@@ -289,6 +296,16 @@ private fun GlassTopBar(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                // Visible way back on platforms with no system back gesture/button
+                // (iOS) — harmless, redundant convenience on Android, which also
+                // has BackHandler wired to the same action.
+                if (onBack != null) {
+                    GlassIconButton(
+                        icon = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
+                        onClick = onBack
+                    )
+                }
                 Image(
                     painter = painterResource(Res.drawable.app_icon),
                     contentDescription = "Photos",

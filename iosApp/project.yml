@@ -1,0 +1,70 @@
+name: iosApp
+options:
+  bundleIdPrefix: com.sevis
+  deploymentTarget:
+    iOS: "15.0"
+
+targets:
+  iosApp:
+    type: application
+    platform: iOS
+    deploymentTarget: "15.0"
+    sources:
+      - path: iosApp
+    info:
+      path: iosApp/Info.plist
+      properties:
+        CFBundleDisplayName: Photos
+        UILaunchScreen: {}
+        LSRequiresIPhoneOS: true
+        # Compose Multiplatform's ComposeUIViewController refuses to run without this —
+        # without it, ProMotion (120Hz) iPhones fall back to a throttled 60Hz-ish frame
+        # pacing for Metal-backed content, reading as janky/laggy scrolling.
+        CADisableMinimumFrameDurationOnPhone: true
+        # PHPickerViewController (Upload) and the on-device Gallery/Albums panes both
+        # need this — Apple requires the usage string even for PHPickerViewController,
+        # which technically doesn't need Photos *permission* itself, because this app
+        # separately reads the library directly for Gallery/Albums/auto-upload.
+        NSPhotoLibraryUsageDescription: >-
+          Photos needs access to your photo library to show your on-device gallery
+          and to upload the photos and videos you choose.
+        # Background auto-upload (see AutoUpload.kt) — best-effort only, see that
+        # file's doc comment for how this differs from Android's WorkManager.
+        UIBackgroundModes:
+          - fetch
+          - processing
+        BGTaskSchedulerPermittedIdentifiers:
+          - com.sevis.photos.autoupload
+        # Google sign-in's OAuth redirect (see GoogleAuth.kt) — replace both this
+        # scheme and AppConfig.kt's GOOGLE_IOS_CLIENT_ID/GOOGLE_IOS_URL_SCHEME together
+        # once a real "iOS" OAuth client exists in Google Cloud Console.
+        CFBundleURLTypes:
+          - CFBundleURLName: google-signin
+            CFBundleURLSchemes:
+              - com.googleusercontent.apps.1059813087193-afms6rj5b3vvjm8njbm8scd2efjg778d
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.sevis.photos
+        PRODUCT_NAME: Photos
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ENABLE_BITCODE: NO
+        FRAMEWORK_SEARCH_PATHS:
+          - "$(inherited)"
+          - "$(SRCROOT)/../composeApp/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)"
+        OTHER_LDFLAGS:
+          - "$(inherited)"
+          - "-framework"
+          - "ComposeApp"
+    preBuildScripts:
+      - name: Build Kotlin/Compose Multiplatform framework
+        script: |
+          # Xcode's build environment doesn't inherit a shell profile — Gradle needs a
+          # JDK 17-21 on JAVA_HOME (a newer default `java` isn't supported by this
+          # project's Gradle/AGP combination). /usr/libexec/java_home finds one
+          # already installed rather than hardcoding a machine-specific path.
+          export JAVA_HOME="$(/usr/libexec/java_home -v 21 2>/dev/null || /usr/libexec/java_home -v 17 2>/dev/null)"
+          export PATH="$JAVA_HOME/bin:$PATH"
+          cd "$SRCROOT/.."
+          ./gradlew :composeApp:embedAndSignAppleFrameworkForXcode
+        basedOnDependencyAnalysis: false

@@ -607,6 +607,18 @@ private fun formatDateHeader(dateStr: String): String {
 private fun formatSize(bytes: Long): String {
     if (bytes <= 0) return "—"
     if (bytes < 1024) return "$bytes B"
-    if (bytes < 1024 * 1024) return "%.1f KB".format(bytes / 1024.0)
-    return "%.2f MB".format(bytes / (1024.0 * 1024))
+    if (bytes < 1024 * 1024) return "${roundTo(bytes / 1024.0, 1)} KB"
+    return "${roundTo(bytes / (1024.0 * 1024), 2)} MB"
+}
+
+/** kotlin.text.format() is backed by java.util.Formatter (JVM-only) — Kotlin/Native
+ *  has no equivalent, so round manually via exact integer math instead. */
+private fun roundTo(value: Double, decimals: Int): String {
+    var factor = 1L
+    repeat(decimals) { factor *= 10 }
+    val scaled = kotlin.math.round(value * factor).toLong()
+    val whole = kotlin.math.abs(scaled) / factor
+    val frac = kotlin.math.abs(scaled) % factor
+    val sign = if (scaled < 0) "-" else ""
+    return "$sign$whole.${frac.toString().padStart(decimals, '0')}"
 }

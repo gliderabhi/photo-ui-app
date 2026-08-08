@@ -26,6 +26,16 @@ kotlin {
         }
     }
 
+    listOf(
+        iosArm64(),
+        iosSimulatorArm64(),
+    ).forEach { target ->
+        target.binaries.framework {
+            baseName = "ComposeApp"
+            isStatic = true
+        }
+    }
+
     sourceSets {
         androidMain.dependencies {
             implementation(libs.activity.compose)
@@ -58,10 +68,6 @@ kotlin {
             implementation(compose.components.resources)
             implementation(compose.components.uiToolingPreview)
             implementation(libs.navigation.compose)
-            // Android-only API (BackHandler), but androidTarget is the only real
-            // compiled target in this project today — if a non-Android target is
-            // ever added, ShellScreen's BackHandler usage will need expect/actual.
-            implementation(libs.activity.compose)
             implementation(libs.ktor.client.core)
             implementation(libs.ktor.client.content.negotiation)
             implementation(libs.ktor.serialization.kotlinx.json)
@@ -69,6 +75,12 @@ kotlin {
             implementation(libs.kotlinx.serialization.json)
             implementation(libs.kotlinx.coroutines.core)
             implementation(libs.coil.compose)
+            implementation(libs.kotlinx.datetime)
+        }
+
+        iosMain.dependencies {
+            implementation(libs.ktor.client.darwin)
+            implementation(libs.coil.network.ktor)
         }
     }
 }
