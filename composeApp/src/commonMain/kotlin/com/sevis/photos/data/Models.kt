@@ -33,6 +33,34 @@ data class AlbumResponse(
 @Serializable
 data class MessageResponse(val message: String)
 
+/** A face detected within one photo, from photo-service's server-side
+ *  face-service pipeline. Box coordinates are fractions (0..1) of the
+ *  photo's width/height. */
+@Serializable
+data class FaceResponse(
+    val id: Long,
+    val photoId: Long,
+    val personId: Long? = null,
+    val boxTop: Double,
+    val boxRight: Double,
+    val boxBottom: Double,
+    val boxLeft: Double
+)
+
+/** A cluster of faces the server believes are the same person (see
+ *  photo-service's FaceService) — unnamed until the user labels it. */
+@Serializable
+data class PersonResponse(
+    val id: Long,
+    val label: String? = null,
+    val faceCount: Int,
+    val coverPhotoId: Long? = null,
+    val coverBoxTop: Double? = null,
+    val coverBoxRight: Double? = null,
+    val coverBoxBottom: Double? = null,
+    val coverBoxLeft: Double? = null
+)
+
 /** Served as a static file (downloads/version.json) alongside the APKs — lets the app
  *  check whether a newer build is available without unconditionally re-downloading it. */
 @Serializable

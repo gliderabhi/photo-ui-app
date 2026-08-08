@@ -217,11 +217,14 @@ class MainActivity : ComponentActivity() {
                 localAlbumPhotosContent = { bucketName, onBack ->
                     com.sevis.photos.screens.LocalAlbumPhotosScreen(bucketName = bucketName, onBack = onBack)
                 },
+                // People used to be a local-only screen (on-device face detection);
+                // it's now server-backed (see photo-service's face-service), so it
+                // reuses the same api/baseUrl every cloud-content pane already has.
                 localPeopleContent = { onBack, onPersonClick ->
-                    com.sevis.photos.screens.FacesScreen(onBack = onBack, onPersonClick = onPersonClick)
+                    com.sevis.photos.screens.PeopleScreen(api = api, baseUrl = BuildConfig.API_BASE_URL, onBack = onBack, onPersonClick = onPersonClick)
                 },
                 localPersonPhotosContent = { personId, displayName, onBack ->
-                    com.sevis.photos.screens.PersonPhotosScreen(personId = personId, displayName = displayName, onBack = onBack)
+                    com.sevis.photos.screens.PersonPhotosScreen(api = api, baseUrl = BuildConfig.API_BASE_URL, personId = personId, displayName = displayName, onBack = onBack)
                 },
                 versionName = BuildConfig.VERSION_NAME,
                 versionCode = BuildConfig.VERSION_CODE

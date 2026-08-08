@@ -45,10 +45,8 @@ kotlin {
             implementation(libs.googleid)
             implementation(libs.room.runtime)
             implementation(libs.room.ktx)
-            implementation(libs.mlkit.face.detection)
             implementation(libs.exifinterface)
             implementation(libs.lifecycle.process)
-            implementation(libs.onnxruntime.android)
         }
 
         commonMain.dependencies {
@@ -142,12 +140,6 @@ android {
 
     buildFeatures {
         buildConfig = true
-    }
-
-    // The bundled sface.onnx (see assets/) is already dense binary weight data,
-    // not worth re-compressing into the APK's zip.
-    androidResources {
-        noCompress += "onnx"
     }
 
     compileOptions {

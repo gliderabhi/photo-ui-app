@@ -140,6 +140,27 @@ class PhotoApi(private val baseUrl: String, val client: HttpClient) {
             auth()
         }.body()
 
+    // ── Faces / People (server-side face detection, see photo-service's
+    //    FaceService — replaced the old on-device ML Kit/SFace pipeline) ──
+
+    // No X-Folder-Password: these return only face geometry and person
+    // metadata, never decrypted photo bytes, so they don't need it — same
+    // as why photo-service's FaceController doesn't require it.
+    suspend fun listPeople(): List<PersonResponse> =
+        client.get("$baseUrl/photo-service/api/photos/people").body()
+
+    suspend fun getPersonPhotos(personId: Long): List<PhotoResponse> =
+        client.get("$baseUrl/photo-service/api/photos/people/$personId/photos").body()
+
+    suspend fun renamePerson(personId: Long, label: String?): PersonResponse =
+        client.patch("$baseUrl/photo-service/api/photos/people/$personId") {
+            contentType(ContentType.Application.Json)
+            setBody(mapOf("label" to label))
+        }.body()
+
+    suspend fun getPhotoFaces(photoId: Long): List<FaceResponse> =
+        client.get("$baseUrl/photo-service/api/photos/$photoId/faces").body()
+
     // ── App updates ───────────────────────────────────────────────
 
     /** No auth — same publicly-served static file UpdateManager downloads the APK from. */

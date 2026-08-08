@@ -18,18 +18,13 @@ class PhotosApplication : Application(), SingletonImageLoader.Factory {
 
     override fun onCreate() {
         super.onCreate()
-        // Face detection is CPU-heavy and must not run while the user is actively
-        // looking at the UI (see LocalScanWorker) — only kick it off once the app
-        // is actually backgrounded, not on every screen composition.
+        // LocalScanWorker (MediaStore sync + place-name resolution) only needs to
+        // run once the app is actually backgrounded, not on every screen
+        // composition — this used to also gate on-device face detection before
+        // that moved server-side (see LocalScanWorker).
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
-            override fun onStart(owner: LifecycleOwner) {
-                Log.d("AppLifecycle", "onStart — foreground")
-                AppForegroundState.isForeground.value = true
-            }
-
             override fun onStop(owner: LifecycleOwner) {
                 Log.d("AppLifecycle", "onStop — background, triggering LocalScanWorker")
-                AppForegroundState.isForeground.value = false
                 LocalScanWorker.runOnce(applicationContext)
             }
         })

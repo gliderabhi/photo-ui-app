@@ -60,10 +60,12 @@ import java.util.Locale
 
 /**
  * The on-device Gallery — the app's default/home content. Photos are read straight
- * from MediaStore into the local Room DB by LocalScanWorker, which also runs
- * on-device ML Kit face detection (background-only, see AppForegroundState).
- * Grouping (by date vs. by place) is controlled from ShellScreen's FAB menu, not
- * locally — [groupByPlace] is hoisted so the FAB and this grid stay in sync.
+ * from MediaStore into the local Room DB by LocalScanWorker, which also reverse-
+ * geocodes GPS into place names in the background. Face detection used to run here
+ * too (on-device ML Kit, then SFace/ONNX Runtime); it's now server-side (see
+ * PeopleScreen, photo-service's face-service). Grouping (by date vs. by place) is
+ * controlled from ShellScreen's FAB menu, not locally — [groupByPlace] is hoisted
+ * so the FAB and this grid stay in sync.
  */
 @Composable
 fun LocalLibraryScreen(groupByPlace: Boolean) {
