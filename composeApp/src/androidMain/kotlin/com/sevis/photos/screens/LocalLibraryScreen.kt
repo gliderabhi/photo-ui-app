@@ -48,8 +48,10 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
+import com.sevis.photos.data.PhotoApi
 import com.sevis.photos.data.local.LocalMediaEntity
 import com.sevis.photos.data.local.PhotosDatabase
+import com.sevis.photos.data.uploadedFilenamesFrom
 import com.sevis.photos.localscan.LocalScanWorker
 import com.sevis.photos.ui.GlassColors
 import com.sevis.photos.ui.GlassPageBackground
@@ -68,7 +70,7 @@ import java.util.Locale
  * so the FAB and this grid stay in sync.
  */
 @Composable
-fun LocalLibraryScreen(groupByPlace: Boolean) {
+fun LocalLibraryScreen(groupByPlace: Boolean, api: PhotoApi) {
     val context = LocalContext.current
     val readPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
         Manifest.permission.READ_MEDIA_IMAGES
@@ -103,6 +105,15 @@ fun LocalLibraryScreen(groupByPlace: Boolean) {
     LaunchedEffect(Unit) { LocalScanWorker.runOnce(context) }
 
     val media by db.localMediaDao().observeAll().collectAsState(initial = emptyList())
+
+    // Filenames already on the server — badges the matching cells below with a small
+    // cloud icon instead of maintaining a separate "Cloud Gallery" pane (see
+    // uploadedFilenamesFrom()). Fetched once; if it fails (e.g. folder still locked)
+    // the grid just shows no badges rather than erroring the whole screen.
+    var uploadedFilenames by remember { mutableStateOf<Set<String>>(emptySet()) }
+    LaunchedEffect(Unit) {
+        runCatching { api.listPhotos() }.onSuccess { uploadedFilenames = uploadedFilenamesFrom(it) }
+    }
 
     val grouped = remember(media, groupByPlace) {
         if (groupByPlace) media.groupBy { it.placeName ?: "Unknown location" }
@@ -163,7 +174,7 @@ fun LocalLibraryScreen(groupByPlace: Boolean) {
                         )
                     }
                     if (!isCollapsed) {
-                        photoGridItems(photos, onPhotoClick = { lightboxPhoto = it })
+                        photoGridItems(photos, uploadedFilenames = uploadedFilenames, onPhotoClick = { lightboxPhoto = it })
                     }
                 }
             }
@@ -195,24 +206,37 @@ private fun DateHeader(label: String, collapsed: Boolean, onToggle: () -> Unit) 
 /**
  * Adds one lazy grid cell per photo — shared by the main Gallery, PersonPhotosScreen,
  * and LocalAlbumPhotosScreen so every photo grid in the app is genuinely virtualized,
- * not just the outer date/group list.
+ * not just the outer date/group list. [uploadedFilenames] (see uploadedFilenamesFrom())
+ * badges cells that are already backed up — only the main Gallery passes a real set today,
+ * so other callers render exactly as before.
  */
-internal fun LazyGridScope.photoGridItems(photos: List<LocalMediaEntity>, onPhotoClick: (LocalMediaEntity) -> Unit) {
+internal fun LazyGridScope.photoGridItems(
+    photos: List<LocalMediaEntity>,
+    uploadedFilenames: Set<String> = emptySet(),
+    onPhotoClick: (LocalMediaEntity) -> Unit
+) {
     items(photos, key = { it.id }) { photo ->
-        AsyncImage(
-            model = ImageRequest.Builder(LocalContext.current)
-                .data(Uri.parse(photo.uri))
-                // Grid cells are small — decoding at a capped size avoids reading full-
-                // resolution camera photos into memory just to shrink them on screen.
-                .size(300, 300)
-                .build(),
-            contentDescription = photo.displayName,
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
-                .clickable { onPhotoClick(photo) },
-            contentScale = androidx.compose.ui.layout.ContentScale.Crop
-        )
+                .clickable { onPhotoClick(photo) }
+        ) {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(Uri.parse(photo.uri))
+                    // Grid cells are small — decoding at a capped size avoids reading full-
+                    // resolution camera photos into memory just to shrink them on screen.
+                    .size(300, 300)
+                    .build(),
+                contentDescription = photo.displayName,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+            )
+            if (photo.displayName in uploadedFilenames) {
+                CloudUploadBadge(modifier = Modifier.align(Alignment.BottomEnd).padding(4.dp))
+            }
+        }
     }
 }
 

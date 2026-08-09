@@ -139,6 +139,22 @@ fun thumbnailFileForId(id: String): String? {
     return thumbnailFile(asset)
 }
 
+/** The asset's real original filename (e.g. "IMG_1234.HEIC") — [LocalMedia.displayName] is
+ *  deliberately *not* this (it's a cheap slice of the stable localIdentifier instead, see
+ *  fetchMedia()'s doc comment), so this is resolved lazily per visible cell, the same way
+ *  thumbnailFileForId() resolves thumbnails. Used to badge Gallery cells already uploaded
+ *  to the server (see uploadedFilenamesFrom() and rememberIsUploaded() in
+ *  LocalGalleryScreens.kt) — a PHAssetResource lookup is metadata-only (no image decode),
+ *  but still real cross-process work, so it's not done eagerly for the whole library. */
+@OptIn(ExperimentalForeignApi::class)
+fun assetFilenameForId(id: String): String? {
+    val result = PHAsset.fetchAssetsWithLocalIdentifiers(listOf(id), PHFetchOptions())
+    val asset = result.objectAtIndex(0U) as? PHAsset ?: return null
+    @Suppress("UNCHECKED_CAST")
+    val resources = PHAssetResource.assetResourcesForAsset(asset) as List<PHAssetResource>
+    return resources.firstOrNull()?.originalFilename
+}
+
 /**
  * A reasonably-sized (1024px long edge) JPEG cached to the app's Caches directory, keyed by
  * the asset's stable localIdentifier so repeat lookups — including across app launches —

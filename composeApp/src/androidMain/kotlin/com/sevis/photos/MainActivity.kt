@@ -210,7 +210,7 @@ class MainActivity : ComponentActivity() {
                 // above is always available.
                 showCredentialsForm = BuildConfig.FLAVOR != "tv",
                 isTv = BuildConfig.FLAVOR == "tv",
-                localLibraryContent = { groupByPlace -> com.sevis.photos.screens.LocalLibraryScreen(groupByPlace) },
+                localLibraryContent = { groupByPlace -> com.sevis.photos.screens.LocalLibraryScreen(groupByPlace, api) },
                 localAlbumsContent = { onBack, onAlbumClick ->
                     com.sevis.photos.screens.LocalAlbumsScreen(onBack = onBack, onAlbumClick = onAlbumClick)
                 },

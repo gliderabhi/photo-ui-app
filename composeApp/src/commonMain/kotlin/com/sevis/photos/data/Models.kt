@@ -21,6 +21,17 @@ data class PhotosByDate(
     val photos: List<PhotoResponse>
 )
 
+/** Filenames (as recorded at upload time) of every photo already on the server for this
+ *  user — used to badge on-device Gallery photos that are already backed up (see
+ *  photoGridItems on both platforms). A filename match isn't a perfect identity check (a
+ *  local photo could coincidentally share a name with an unrelated upload, or the same
+ *  photo could show as "not uploaded" if renamed since), but it needs no new backend
+ *  endpoint, no per-photo hashing, and no extra network round trip beyond the listPhotos()
+ *  call the app already needs elsewhere — a reasonable tradeoff for what's just a visual
+ *  hint, not a source of truth. */
+fun uploadedFilenamesFrom(byDate: List<PhotosByDate>): Set<String> =
+    byDate.flatMapTo(mutableSetOf()) { group -> group.photos.map { it.originalFilename } }
+
 @Serializable
 data class AlbumResponse(
     val id: Int,

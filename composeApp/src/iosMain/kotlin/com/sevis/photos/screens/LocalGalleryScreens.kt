@@ -44,6 +44,9 @@ import androidx.compose.ui.window.DialogProperties
 import coil3.compose.AsyncImage
 import com.sevis.photos.LocalAlbum
 import com.sevis.photos.LocalMedia
+import com.sevis.photos.assetFilenameForId
+import com.sevis.photos.data.PhotoApi
+import com.sevis.photos.data.uploadedFilenamesFrom
 import com.sevis.photos.fetchAlbumMedia
 import com.sevis.photos.fetchAlbums
 import com.sevis.photos.fetchAllMedia
@@ -69,7 +72,7 @@ import platform.Foundation.dateWithTimeIntervalSince1970
  * is manual (pull-to-refresh isn't wired up here; re-entering the pane re-fetches).
  */
 @Composable
-fun LocalLibraryScreen(groupByPlace: Boolean) {
+fun LocalLibraryScreen(groupByPlace: Boolean, api: PhotoApi) {
     var hasPermission by remember { mutableStateOf(hasPhotoLibraryAccess()) }
     var media by remember { mutableStateOf<List<LocalMedia>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
@@ -83,6 +86,15 @@ fun LocalLibraryScreen(groupByPlace: Boolean) {
         loading = true
         media = withContext(Dispatchers.Default) { fetchAllMedia() }
         loading = false
+    }
+
+    // Filenames already on the server — badges the matching cells below with a small
+    // cloud icon instead of maintaining a separate "Cloud Gallery" pane (see
+    // uploadedFilenamesFrom()). Fetched once; if it fails (e.g. folder still locked)
+    // the grid just shows no badges rather than erroring the whole screen.
+    var uploadedFilenames by remember { mutableStateOf<Set<String>>(emptySet()) }
+    LaunchedEffect(Unit) {
+        runCatching { api.listPhotos() }.onSuccess { uploadedFilenames = uploadedFilenamesFrom(it) }
     }
 
     if (!hasPermission) {
@@ -156,7 +168,7 @@ fun LocalLibraryScreen(groupByPlace: Boolean) {
                         })
                     }
                     if (!isCollapsed) {
-                        photoGridItems(photos, onPhotoClick = { lightboxPhoto = it })
+                        photoGridItems(photos, uploadedFilenames = uploadedFilenames, onPhotoClick = { lightboxPhoto = it })
                     }
                 }
             }
@@ -195,9 +207,27 @@ private fun rememberThumbnailPath(id: String): String? {
     return path
 }
 
-internal fun LazyGridScope.photoGridItems(photos: List<LocalMedia>, onPhotoClick: (LocalMedia) -> Unit) {
+/** Whether this asset's real filename (resolved lazily — see assetFilenameForId()) is
+ *  already on the server. Skips the PHAssetResource lookup entirely when
+ *  [uploadedFilenames] is empty (folder locked / not fetched yet / nothing uploaded), the
+ *  common case for most sessions. */
+@Composable
+private fun rememberIsUploaded(id: String, uploadedFilenames: Set<String>): Boolean {
+    if (uploadedFilenames.isEmpty()) return false
+    val filename by produceState<String?>(initialValue = null, id) {
+        value = withContext(Dispatchers.Default) { assetFilenameForId(id) }
+    }
+    return filename != null && filename in uploadedFilenames
+}
+
+internal fun LazyGridScope.photoGridItems(
+    photos: List<LocalMedia>,
+    uploadedFilenames: Set<String> = emptySet(),
+    onPhotoClick: (LocalMedia) -> Unit
+) {
     items(photos, key = { it.id }) { photo ->
         val path = rememberThumbnailPath(photo.id)
+        val isUploaded = rememberIsUploaded(photo.id, uploadedFilenames)
         Box(modifier = Modifier.fillMaxWidth().aspectRatio(1f).clickable { onPhotoClick(photo) }) {
             if (path != null) {
                 AsyncImage(
@@ -208,6 +238,9 @@ internal fun LazyGridScope.photoGridItems(photos: List<LocalMedia>, onPhotoClick
                 )
             } else {
                 Box(Modifier.fillMaxSize().background(Color.Gray.copy(alpha = 0.15f)))
+            }
+            if (isUploaded) {
+                CloudUploadBadge(modifier = Modifier.align(Alignment.BottomEnd).padding(4.dp))
             }
         }
     }

@@ -83,7 +83,7 @@ fun MainViewController(): UIViewController {
             extraLoginContent = { onSuccess -> GoogleSignInButton(api = api, onLoginSuccess = onSuccess) },
             showCredentialsForm = true,
             isTv = false,
-            localLibraryContent = { groupByPlace -> com.sevis.photos.screens.LocalLibraryScreen(groupByPlace) },
+            localLibraryContent = { groupByPlace -> com.sevis.photos.screens.LocalLibraryScreen(groupByPlace, api) },
             localAlbumsContent = { onBack, onAlbumClick ->
                 com.sevis.photos.screens.LocalAlbumsScreen(onBack = onBack, onAlbumClick = onAlbumClick)
             },

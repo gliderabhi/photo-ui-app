@@ -54,9 +54,15 @@ import org.jetbrains.compose.resources.painterResource
 /**
  * All destinations reachable from the shell. Gallery is home; every other pane —
  * regrouping the on-device library (Albums/People/By Place/By Date) as well as
- * cloud-side content (Upload/Cloud Gallery/Videos/Favorites) — is reached from the
- * FAB. The top bar's overflow menu is reserved for account-level actions only
- * (Lock Folder/Settings/Logout), not content navigation.
+ * cloud-side content (Upload/Videos/Favorites) — is reached from the FAB. The top
+ * bar's overflow menu is reserved for account-level actions only (Lock Folder/
+ * Settings/Logout), not content navigation.
+ *
+ * There used to be a separate "Cloud Gallery" pane here (the same GalleryScreen
+ * backing Favorites below, just unfiltered) — removed in favor of a single,
+ * on-device-first Gallery: local photos load instantly and already-uploaded ones
+ * get a small cloud badge (see photoGridItems' uploadedFilenames param on both
+ * platforms), so there's no separate cloud timeline to keep in sync or explain.
  */
 private sealed class AppPane {
     data object Gallery : AppPane()
@@ -65,7 +71,6 @@ private sealed class AppPane {
     data object People : AppPane()
     data class PersonPhotos(val personId: Long, val displayName: String?) : AppPane()
     data object Upload : AppPane()
-    data object CloudGallery : AppPane()
     data object Videos : AppPane()
     data object Favorites : AppPane()
 }
@@ -175,13 +180,6 @@ fun ShellScreen(
                     uploadVideo = uploadVideo,
                     autoUploadEnabled = autoUploadEnabled,
                     onAutoUploadToggle = onAutoUploadToggle
-                )
-                AppPane.CloudGallery -> GalleryScreen(
-                    api = api,
-                    baseUrl = baseUrl,
-                    favoritesOnly = false,
-                    onFavoritesChange = onFavoritesChange,
-                    isTv = isTv
                 )
                 AppPane.Videos -> VideoListScreen(
                     videoApi = videoApi,
@@ -401,7 +399,6 @@ private fun GlassFab(
             val items = listOf(
                 FabMenuItem("Favorites", Icons.Filled.Favorite) { onNavigate(AppPane.Favorites) },
                 FabMenuItem("Videos", Icons.Filled.VideoLibrary) { onNavigate(AppPane.Videos) },
-                FabMenuItem("Cloud Gallery", Icons.Filled.PhotoLibrary) { onNavigate(AppPane.CloudGallery) },
                 FabMenuItem("Upload", Icons.Filled.CloudUpload) { onNavigate(AppPane.Upload) },
                 FabMenuItem("People", Icons.Filled.Face) { onNavigate(AppPane.People) },
                 FabMenuItem("Albums", Icons.Filled.Folder) { onNavigate(AppPane.Albums) },
