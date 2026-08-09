@@ -4,6 +4,15 @@ options:
   deploymentTarget:
     iOS: "15.0"
 
+# Google's own sign-in SDK — lets the sign-in sheet hand off to the Google/Gmail app if
+# it's installed, instead of always showing a plain browser sheet (see
+# iosApp/GoogleSignInBridge.swift and GoogleNativeSignIn.kt for why this has to be wired
+# in from the Swift side rather than called from Kotlin directly).
+packages:
+  GoogleSignIn:
+    url: https://github.com/google/GoogleSignIn-iOS
+    from: 7.1.0
+
 targets:
   iosApp:
     type: application
@@ -42,6 +51,9 @@ targets:
           - CFBundleURLName: google-signin
             CFBundleURLSchemes:
               - com.googleusercontent.apps.1059813087193-afms6rj5b3vvjm8njbm8scd2efjg778d
+    dependencies:
+      - package: GoogleSignIn
+        product: GoogleSignIn
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.sevis.photos

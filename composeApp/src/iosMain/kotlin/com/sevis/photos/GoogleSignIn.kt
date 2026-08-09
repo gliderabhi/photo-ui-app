@@ -22,11 +22,28 @@ import com.sevis.photos.data.PhotoApi
 import com.sevis.photos.data.needsGoogleSignupCompletion
 import com.sevis.photos.screens.GoogleCompleteSignupForm
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
+
+/** Bridges GoogleNativeSignIn's callback shape into the same nullable-return-or-throw
+ *  contract signInWithGoogle() has, so callers below don't need two code paths. Prefers
+ *  the native SDK (Gmail/Google app hand-off) when Swift has wired one up; falls back to
+ *  the browser-based PKCE flow otherwise — see GoogleNativeSignIn.kt. */
+private suspend fun signInWithGoogleNativeOrFallback(): String? {
+    val native = googleNativeSignIn ?: return signInWithGoogle()
+    val (idToken, errorMessage) = suspendCancellableCoroutine { cont ->
+        native.signIn { idToken, errorMessage -> cont.resume(idToken to errorMessage) }
+    }
+    if (errorMessage != null) error(errorMessage)
+    return idToken
+}
 
 /** iOS's counterpart to MobileGoogleLoginContent — same shape/behavior (loading
  *  spinner, retry-on-cancel, error with retry, and now the shared "complete your
- *  signup" step for a first-time Photos identity), Google's own OAuth flow instead
- *  of Android's Credential Manager. See GoogleAuth.kt for the actual sign-in call. */
+ *  signup" step for a first-time Photos identity). Prefers Google's native SDK (see
+ *  GoogleNativeSignIn.kt, iosApp/GoogleSignInBridge.swift) so sign-in can hand off to
+ *  the Google/Gmail app the way Android's Credential Manager flow does; falls back to
+ *  the plain browser sheet (GoogleAuth.kt) if that's unavailable. */
 @Composable
 fun GoogleSignInButton(api: PhotoApi, onLoginSuccess: (String) -> Unit) {
     val scope = rememberCoroutineScope()
@@ -40,7 +57,7 @@ fun GoogleSignInButton(api: PhotoApi, onLoginSuccess: (String) -> Unit) {
         loading = true
         error = null
         scope.launch {
-            val signInResult = runCatching { signInWithGoogle() }
+            val signInResult = runCatching { signInWithGoogleNativeOrFallback() }
             val idToken = signInResult.getOrNull()
             if (signInResult.isFailure) {
                 loading = false

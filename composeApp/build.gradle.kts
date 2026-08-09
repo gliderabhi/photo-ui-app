@@ -53,6 +53,10 @@ kotlin {
             implementation(libs.credentials)
             implementation(libs.credentials.play.services.auth)
             implementation(libs.googleid)
+            // Older Google Sign-In entry point (GoogleSignInClient), used only as a
+            // fallback native picker when Credential Manager can't offer any credential —
+            // see MobileGoogleLoginContent.kt.
+            implementation(libs.play.services.auth)
             implementation(libs.room.runtime)
             implementation(libs.room.ktx)
             implementation(libs.exifinterface)
