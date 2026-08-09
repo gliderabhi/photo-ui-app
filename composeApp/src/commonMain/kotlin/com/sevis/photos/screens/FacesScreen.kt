@@ -109,7 +109,7 @@ fun PeopleScreen(api: PhotoApi, baseUrl: String, onBack: () -> Unit, onPersonCli
                                 // doesn't support out of the box. Center-crop reads fine for a
                                 // person avatar in the vast majority of photos.
                                 AsyncImage(
-                                    model = "$baseUrl/photo-service/api/photos/${person.coverPhotoId}/content",
+                                    model = "$baseUrl/photo-service/api/photos/${person.coverPhotoId}/content?maxDimension=400",
                                     contentDescription = person.label ?: "Unnamed person",
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier.fillMaxSize()
@@ -173,7 +173,7 @@ fun PersonPhotosScreen(
             ) {
                 items(photos, key = { it.id }) { photo ->
                     AsyncImage(
-                        model = "$baseUrl/photo-service/api/photos/${photo.id}/content",
+                        model = "$baseUrl/photo-service/api/photos/${photo.id}/content?maxDimension=400",
                         contentDescription = photo.originalFilename,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier

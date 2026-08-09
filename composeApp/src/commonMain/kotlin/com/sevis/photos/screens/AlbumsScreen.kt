@@ -165,7 +165,7 @@ private fun AlbumCard(
             ) {
                 if (album.coverPhoto != null) {
                     AsyncImage(
-                        model = "$baseUrl/photo-service/api/photos/${album.coverPhoto.id}/content",
+                        model = "$baseUrl/photo-service/api/photos/${album.coverPhoto.id}/content?maxDimension=400",
                         contentDescription = album.name,
                         modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
                         contentScale = ContentScale.Crop

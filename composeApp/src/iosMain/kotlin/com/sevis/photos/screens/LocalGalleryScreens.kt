@@ -49,6 +49,7 @@ import com.sevis.photos.fetchAlbums
 import com.sevis.photos.fetchAllMedia
 import com.sevis.photos.hasPhotoLibraryAccess
 import com.sevis.photos.requestPhotoLibraryAccess
+import com.sevis.photos.thumbnailFileForId
 import com.sevis.photos.ui.GlassColors
 import com.sevis.photos.ui.GlassPageBackground
 import com.sevis.photos.ui.GlassSurface
@@ -181,14 +182,34 @@ private fun DateHeader(label: String, collapsed: Boolean, onToggle: () -> Unit) 
     }
 }
 
+/** Resolves (and disk-caches) one asset's thumbnail lazily, only while its composable is
+ *  actually part of the composition — for a LazyVerticalGrid that means only currently
+ *  visible cells (plus LazyVerticalGrid's own small prefetch buffer), not the whole library
+ *  at once. This is what fixed both the "Gallery takes forever to appear" and the
+ *  didReceiveMemoryWarning crash — see LocalPhotoLibrary.kt's fetchAllMedia() doc comment. */
+@Composable
+private fun rememberThumbnailPath(id: String): String? {
+    val path by produceState<String?>(initialValue = null, id) {
+        value = withContext(Dispatchers.Default) { thumbnailFileForId(id) }
+    }
+    return path
+}
+
 internal fun LazyGridScope.photoGridItems(photos: List<LocalMedia>, onPhotoClick: (LocalMedia) -> Unit) {
     items(photos, key = { it.id }) { photo ->
-        AsyncImage(
-            model = photo.uri,
-            contentDescription = photo.displayName,
-            modifier = Modifier.fillMaxWidth().aspectRatio(1f).clickable { onPhotoClick(photo) },
-            contentScale = ContentScale.Crop
-        )
+        val path = rememberThumbnailPath(photo.id)
+        Box(modifier = Modifier.fillMaxWidth().aspectRatio(1f).clickable { onPhotoClick(photo) }) {
+            if (path != null) {
+                AsyncImage(
+                    model = path,
+                    contentDescription = photo.displayName,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Box(Modifier.fillMaxSize().background(Color.Gray.copy(alpha = 0.15f)))
+            }
+        }
     }
 }
 
@@ -204,11 +225,10 @@ internal fun LocalPhotoLightbox(photos: List<LocalMedia>, initialPhoto: LocalMed
             var scale by remember(current) { mutableFloatStateOf(1f) }
             var offset by remember(current) { mutableStateOf(Offset.Zero) }
             var showDetails by remember(current) { mutableStateOf(false) }
+            val currentPath = rememberThumbnailPath(current.id)
 
-            AsyncImage(
-                model = current.uri,
-                contentDescription = current.displayName,
-                contentScale = ContentScale.Fit,
+            Box(
+                contentAlignment = Alignment.Center,
                 modifier = Modifier
                     .fillMaxSize()
                     .pointerInput(current) {
@@ -248,7 +268,18 @@ internal fun LocalPhotoLightbox(photos: List<LocalMedia>, initialPhoto: LocalMed
                         })
                     }
                     .graphicsLayer(scaleX = scale, scaleY = scale, translationX = offset.x, translationY = offset.y)
-            )
+            ) {
+                if (currentPath != null) {
+                    AsyncImage(
+                        model = currentPath,
+                        contentDescription = current.displayName,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    CircularProgressIndicator(color = Color.White)
+                }
+            }
 
             IconButton(onClick = onDismiss, modifier = Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(16.dp)) {
                 Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
@@ -336,15 +367,16 @@ fun LocalAlbumsScreen(onBack: () -> Unit, onAlbumClick: (String) -> Unit) {
 
 @Composable
 private fun AlbumCell(album: LocalAlbum, onClick: () -> Unit) {
+    val coverPath = album.coverId?.let { rememberThumbnailPath(it) }
     GlassSurface(modifier = Modifier.clickable(onClick = onClick), shape = RoundedCornerShape(16.dp), elevation = 4.dp) {
         Column {
             Box(
                 modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(16.dp)),
                 contentAlignment = Alignment.Center
             ) {
-                if (album.coverUri != null) {
+                if (coverPath != null) {
                     AsyncImage(
-                        model = album.coverUri,
+                        model = coverPath,
                         contentDescription = album.name,
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop

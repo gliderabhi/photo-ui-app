@@ -10,19 +10,25 @@ import platform.UIKit.UIImageJPEGRepresentation
 import kotlin.coroutines.resume
 
 /** A photo/video on-device — PHPhotoLibrary's counterpart to Android's LocalMediaEntity
- *  (see data/local/Entities.kt). [uri] is a cached thumbnail JPEG the app wrote to its own
- *  Caches directory (see thumbnailFile()), not a live reference into Photos — same reason
- *  MediaPicker copies picked files out rather than holding onto PHPicker's own handles. */
+ *  (see data/local/Entities.kt). Deliberately carries no image data itself — [id] is a
+ *  stable PHAsset.localIdentifier the UI resolves to a cached thumbnail lazily, one visible
+ *  cell at a time (see thumbnailFileForId()), not eagerly for the whole library up front.
+ *  That eager version (an earlier iteration of this file) generated a decoded+JPEG-encoded
+ *  thumbnail for *every* asset before returning any results at all — fine for a small
+ *  library, but on a real phone with thousands of photos it was both why the Gallery pane
+ *  took forever to show anything and why iOS was killing the app for memory pressure
+ *  (didReceiveMemoryWarning) partway through. fetchAllMedia() and friends below are now
+ *  just PHAsset metadata reads (no image decoding at all), so they return in well under a
+ *  second regardless of library size. */
 data class LocalMedia(
     val id: String,
-    val uri: String,
     val displayName: String,
     val dateTakenMillis: Long,
     val bucketName: String?,
     val isVideo: Boolean,
 )
 
-data class LocalAlbum(val id: String, val name: String, val photoCount: Int, val coverUri: String?)
+data class LocalAlbum(val id: String, val name: String, val photoCount: Int, val coverId: String?)
 
 @OptIn(ExperimentalForeignApi::class)
 fun hasPhotoLibraryAccess(): Boolean {
@@ -53,7 +59,8 @@ fun fetchMediaSince(sinceEpochSeconds: Long): List<LocalMedia> = fetchMedia(sinc
 fun fetchAlbumMedia(albumId: String): List<LocalMedia> = fetchMedia(sinceEpochSeconds = null, albumId = albumId)
 
 /** User-created albums on-device (PHAssetCollectionType album) — backs LocalAlbumsScreen,
- *  the on-device counterpart to Android's MediaStore BUCKET_DISPLAY_NAME grouping. */
+ *  the on-device counterpart to Android's MediaStore BUCKET_DISPLAY_NAME grouping. Cheap:
+ *  just reads each collection's asset count and first asset's id, no image decoding. */
 @OptIn(ExperimentalForeignApi::class)
 fun fetchAlbums(): List<LocalAlbum> {
     val options = PHFetchOptions().apply {
@@ -69,16 +76,17 @@ fun fetchAlbums(): List<LocalAlbum> {
         val collection = collections.objectAtIndex(i.toULong()) as PHAssetCollection
         val assetOptions = PHFetchOptions().apply {
             sortDescriptors = listOf(NSSortDescriptor(key = "creationDate", ascending = false))
+            fetchLimit = 1UL // only the cover is needed here — the rest load via fetchAlbumMedia()
         }
         val assets = PHAsset.fetchAssetsInAssetCollection(collection, assetOptions)
-        val count = assets.count.toInt()
-        if (count == 0) continue
-        val cover = assets.objectAtIndex(0U) as PHAsset
+        val totalCount = PHAsset.fetchAssetsInAssetCollection(collection, PHFetchOptions()).count.toInt()
+        if (totalCount == 0) continue
+        val cover = assets.objectAtIndex(0U) as? PHAsset
         albums += LocalAlbum(
             id = collection.localIdentifier,
             name = collection.localizedTitle ?: "Untitled",
-            photoCount = count,
-            coverUri = thumbnailFile(cover),
+            photoCount = totalCount,
+            coverId = cover?.localIdentifier,
         )
     }
     return albums
@@ -109,11 +117,9 @@ private fun fetchMedia(sinceEpochSeconds: Long?, albumId: String?): List<LocalMe
     val items = mutableListOf<LocalMedia>()
     for (i in 0 until result.count.toInt()) {
         val asset = result.objectAtIndex(i.toULong()) as PHAsset
-        val thumb = thumbnailFile(asset) ?: continue
         val created = asset.creationDate?.timeIntervalSince1970
         items += LocalMedia(
             id = asset.localIdentifier,
-            uri = thumb,
             displayName = asset.localIdentifier.substringBefore("/"),
             dateTakenMillis = ((created ?: 0.0) * 1000).toLong(),
             bucketName = null,
@@ -123,14 +129,22 @@ private fun fetchMedia(sinceEpochSeconds: Long?, albumId: String?): List<LocalMe
     return items
 }
 
+/** Re-fetches a single PHAsset by id (cheap metadata lookup) and resolves/caches its
+ *  thumbnail — the lazy, per-cell counterpart to what fetch*Media() used to do eagerly for
+ *  every asset. Always call from a background dispatcher (blocking image decode). */
+@OptIn(ExperimentalForeignApi::class)
+fun thumbnailFileForId(id: String): String? {
+    val result = PHAsset.fetchAssetsWithLocalIdentifiers(listOf(id), PHFetchOptions())
+    val asset = result.objectAtIndex(0U) as? PHAsset ?: return null
+    return thumbnailFile(asset)
+}
+
 /**
  * A reasonably-sized (1024px long edge) JPEG cached to the app's Caches directory, keyed by
- * the asset's stable localIdentifier so repeat lookups across launches are free. This is the
- * one simplification vs. Android's LocalLibraryScreen, which loads MediaStore's content:// Uri
- * directly at full resolution in the lightbox — PHAsset has no directly-loadable Uri Coil can
- * read, only an async image-data API, so everything (grid thumbnail and lightbox alike) uses
- * this same cached size here. Blocking (PHImageRequestOptions.synchronous = true) — always
- * call from a background dispatcher.
+ * the asset's stable localIdentifier so repeat lookups — including across app launches —
+ * are just a file-existence check. Blocking (PHImageRequestOptions.synchronous = true) —
+ * always call from a background dispatcher, and only for one asset at a time (see
+ * thumbnailFileForId(), called lazily per visible grid cell).
  */
 @OptIn(ExperimentalForeignApi::class)
 fun thumbnailFile(asset: PHAsset): String? {

@@ -509,7 +509,7 @@ private fun PhotoGrid(
                             .clickable { onPhotoClick(photo) }
                     ) {
                         AsyncImage(
-                            model = "$baseUrl/photo-service/api/photos/${photo.id}/content",
+                            model = "$baseUrl/photo-service/api/photos/${photo.id}/content?maxDimension=400",
                             contentDescription = photo.originalFilename,
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop
