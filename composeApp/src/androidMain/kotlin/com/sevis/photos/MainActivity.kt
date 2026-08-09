@@ -200,10 +200,15 @@ class MainActivity : ComponentActivity() {
         // Without a timeout, a stalled connection (bad network, DNS hang, silently
         // dropped packets) leaves the login screen's coroutine suspended forever —
         // the spinner never stops and neither onSuccess nor onFailure ever fires.
+        // 15s was too tight for two real request shapes this client makes: a large
+        // HEIC/video upload over a slow connection, and POST .../faces/scan, which
+        // processes its whole batch synchronously server-side (decrypt + a face-service
+        // round trip per photo) before responding at all — both timed out in practice.
+        // Connect timeout stays tight; it's the request itself that needs the room.
         install(HttpTimeout) {
-            requestTimeoutMillis = 15_000
+            requestTimeoutMillis = 60_000
             connectTimeoutMillis = 10_000
-            socketTimeoutMillis = 15_000
+            socketTimeoutMillis = 60_000
         }
         install(ContentNegotiation) {
             json(Json { ignoreUnknownKeys = true; isLenient = true })

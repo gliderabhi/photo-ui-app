@@ -74,8 +74,8 @@ fun PeopleScreen(api: PhotoApi, baseUrl: String, onBack: () -> Unit, onPersonCli
         // blocking the list above) and refreshes people as each one turns up
         // something, so newly-detected people appear without leaving this screen.
         scope.launch {
-            for (iteration in 1..10) {
-                val result = runCatching { api.scanFaces(limit = 20) }.getOrNull() ?: break
+            for (iteration in 1..30) {
+                val result = runCatching { api.scanFaces() }.getOrNull() ?: break
                 if (result.scanned > 0) {
                     runCatching { api.listPeople() }.onSuccess { people = it }
                 }

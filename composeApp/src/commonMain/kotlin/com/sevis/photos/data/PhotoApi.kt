@@ -204,8 +204,11 @@ class PhotoApi(private val baseUrl: String, val client: HttpClient) {
      *  to upload anymore, so this is what actually drives it, called periodically
      *  from AutoUpload on both platforms (plus SettingsScreen's manual "Scan now").
      *  [FaceScanBatchResponse.remaining] tells the caller whether it's worth calling
-     *  again soon. */
-    suspend fun scanFaces(limit: Int = 10): FaceScanBatchResponse =
+     *  again soon. Default kept small (5): the whole batch runs synchronously
+     *  server-side (decrypt + a face-service round trip per photo) before responding
+     *  at all, and a bigger batch was timing out client-side in practice even with a
+     *  generous 60s request timeout (see KtorClient.kt/MainActivity's buildKtorClient). */
+    suspend fun scanFaces(limit: Int = 5): FaceScanBatchResponse =
         client.post("$baseUrl/photo-service/api/photos/faces/scan") {
             auth()
             parameter("limit", limit)

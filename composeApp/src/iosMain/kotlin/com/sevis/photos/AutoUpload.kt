@@ -213,7 +213,7 @@ private suspend fun syncNow() = withContext(Dispatchers.Default) {
 // BGTaskScheduler's own timer, so a backlog clears gradually over successive runs
 // rather than any one run taking noticeably longer.
 private suspend fun runFaceScanBatch(photoApi: PhotoApi) {
-    runCatching { photoApi.scanFaces(limit = 10) }
+    runCatching { photoApi.scanFaces() }
         .onSuccess { result -> log("Face scan batch: scanned=${result.scanned}, remaining=${result.remaining}") }
         .onFailure { e -> log("Face scan batch failed: ${e::class.simpleName}: ${e.message}") }
 }

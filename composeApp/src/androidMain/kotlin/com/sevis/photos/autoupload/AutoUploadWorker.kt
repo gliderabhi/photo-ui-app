@@ -12,6 +12,7 @@ import com.sevis.photos.BuildConfig
 import com.sevis.photos.data.PhotoApi
 import io.ktor.client.*
 import io.ktor.client.engine.android.*
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.plugins.api.*
 import io.ktor.http.*
@@ -151,13 +152,25 @@ class AutoUploadWorker(
     // (see AutoUploadScheduler), so a backlog clears gradually over successive runs
     // without any one run taking noticeably longer than an upload-only run would.
     private suspend fun runFaceScanBatch(photoApi: PhotoApi) {
-        runCatching { photoApi.scanFaces(limit = 10) }
+        runCatching { photoApi.scanFaces() }
             .onSuccess { result -> Log.d(TAG, "Face scan batch: scanned=${result.scanned}, remaining=${result.remaining}") }
             .onFailure { e -> Log.w(TAG, "Face scan batch failed: ${e::class.simpleName}: ${e.message}") }
     }
 
     private fun buildHttpClient(token: String): HttpClient {
         return HttpClient(Android) {
+            // No HttpTimeout previously installed here at all — ktor-client-android
+            // without one falls back to the underlying engine's own default, which for
+            // some requests effectively means no timeout, i.e. a stuck connection could
+            // hang the whole run indefinitely rather than failing fast. 60s matches the
+            // main app client (MainActivity's buildKtorClient) — long enough for a large
+            // HEIC upload or a faces/scan batch (processed synchronously server-side)
+            // without hanging forever on a truly dead connection.
+            install(HttpTimeout) {
+                requestTimeoutMillis = 60_000
+                connectTimeoutMillis = 10_000
+                socketTimeoutMillis = 60_000
+            }
             install(ContentNegotiation) {
                 json(Json { ignoreUnknownKeys = true })
             }

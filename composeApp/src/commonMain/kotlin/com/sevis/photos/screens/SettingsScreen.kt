@@ -61,16 +61,19 @@ fun SettingsScreen(
 
     // Loops scanFaces() — each call only handles a small batch (see PhotoService#
     // scanFaceBatch on the server), so a "scan everything now" tap needs to keep
-    // calling until the server reports nothing left. Capped at 50 iterations (with
-    // the default limit=10 per call, 500 photos) as a sanity bound, not because
+    // calling until the server reports nothing left. Capped at 300 iterations (with
+    // the default limit=5 per call, 1500 photos) as a sanity bound, not because
     // that's expected to be hit — auto-upload's own periodic calls (see AutoUpload
-    // on both platforms) would otherwise finish the rest anyway.
+    // on both platforms) would otherwise finish the rest anyway. limit is kept small
+    // (see PhotoApi#scanFaces' doc comment) rather than fewer/bigger calls — a bigger
+    // batch was timing out client-side even with a generous request timeout, since
+    // the whole batch runs synchronously server-side before responding at all.
     fun startFaceScan() {
         faceScanState = FaceScanState.Scanning(0)
         scope.launch {
             var totalScanned = 0
-            for (iteration in 1..50) {
-                val result = runCatching { api.scanFaces(limit = 20) }.getOrElse { e ->
+            for (iteration in 1..300) {
+                val result = runCatching { api.scanFaces() }.getOrElse { e ->
                     faceScanState = FaceScanState.Failed(e.message ?: "Face scan failed")
                     return@launch
                 }
