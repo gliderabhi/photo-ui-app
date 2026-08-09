@@ -96,7 +96,17 @@ private suspend fun presentAuthSession(url: String, callbackScheme: String): Str
             }
         }
         session.presentationContextProvider = contextProvider
-        session.prefersEphemeralWebBrowserSession = true
+        // false (the default) lets this sheet share Safari's system-wide web session —
+        // if the user is already signed into Google in Safari (extremely common: Gmail,
+        // a previous sign-in here, etc.), Google recognizes that session and skips
+        // straight to an account picker/"Continue as ___" instead of asking for a fresh
+        // email+password every time. This was previously forced to `true` (an ephemeral,
+        // cookie-less session), which is what made every sign-in demand full credentials
+        // — the iOS-side equivalent of Android's Chrome-account-picker complaint, since
+        // there's no native Google account picker on iOS without adding Google's own SDK
+        // (see this function's doc comment on why we use ASWebAuthenticationSession
+        // instead).
+        session.prefersEphemeralWebBrowserSession = false
 
         // Hold strong references for as long as the session is running.
         activeSession = session
