@@ -199,6 +199,13 @@ class PhotoApi(private val baseUrl: String, val client: HttpClient) {
             setBody(mapOf("label" to label))
         }.body()
 
+    /** Detection normally only ever runs once, at upload time — this catches up
+     *  photos uploaded before server-side face detection existed (see
+     *  PhotoService#backfillFaces). Runs in the background server-side; this call
+     *  itself returns as soon as the scan has started, not once it's finished. */
+    suspend fun backfillFaces(): MessageResponse =
+        client.post("$baseUrl/photo-service/api/photos/faces/backfill") { auth() }.body()
+
     suspend fun getPhotoFaces(photoId: Long): List<FaceResponse> =
         client.get("$baseUrl/photo-service/api/photos/$photoId/faces").body()
 

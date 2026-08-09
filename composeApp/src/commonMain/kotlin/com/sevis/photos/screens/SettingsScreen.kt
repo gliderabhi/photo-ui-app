@@ -6,6 +6,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.SystemUpdateAlt
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -19,6 +20,13 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.sevis.photos.data.PhotoApi
 import kotlinx.coroutines.launch
+
+private sealed interface FaceBackfillState {
+    data object Idle : FaceBackfillState
+    data object Starting : FaceBackfillState
+    data object Started : FaceBackfillState
+    data class Failed(val message: String) : FaceBackfillState
+}
 
 private sealed interface UpdateCheckState {
     data object Idle : UpdateCheckState
@@ -47,6 +55,16 @@ fun SettingsScreen(
 ) {
     val scope = rememberCoroutineScope()
     var checkState by remember { mutableStateOf<UpdateCheckState>(UpdateCheckState.Idle) }
+    var faceBackfillState by remember { mutableStateOf<FaceBackfillState>(FaceBackfillState.Idle) }
+
+    fun startFaceBackfill() {
+        faceBackfillState = FaceBackfillState.Starting
+        scope.launch {
+            runCatching { api.backfillFaces() }
+                .onSuccess { faceBackfillState = FaceBackfillState.Started }
+                .onFailure { e -> faceBackfillState = FaceBackfillState.Failed(e.message ?: "Couldn't start face scan") }
+        }
+    }
 
     fun checkForUpdates() {
         checkState = UpdateCheckState.Checking
@@ -152,6 +170,50 @@ fun SettingsScreen(
                             }
                             Switch(checked = autoUploadEnabled, onCheckedChange = onAutoUploadToggle)
                         }
+                    }
+
+                    // Face detection backfill card — detection only ever runs at upload
+                    // time, so this is the catch-up for anything already uploaded before
+                    // that existed (see PhotoService#backfillFaces).
+                    SettingsCard {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Icon(Icons.Default.Face, contentDescription = null, tint = Color(0xFF0A84FF))
+                            Column {
+                                Text("Scan existing photos for faces", fontWeight = FontWeight.Medium, fontSize = 15.sp)
+                                Text(
+                                    "People are detected automatically for new uploads — run this once to catch up photos uploaded earlier",
+                                    fontSize = 12.sp, color = Color(0xFF5F6368)
+                                )
+                            }
+                        }
+
+                        Spacer(Modifier.height(12.dp))
+
+                        when (val state = faceBackfillState) {
+                            is FaceBackfillState.Idle -> {}
+                            is FaceBackfillState.Starting -> {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                    Text("Starting…", fontSize = 13.sp, color = Color(0xFF5F6368))
+                                }
+                            }
+                            is FaceBackfillState.Started -> {
+                                Text(
+                                    "Scan started — check the People tab in a bit",
+                                    fontSize = 13.sp, color = Color(0xFF1E8E3E)
+                                )
+                            }
+                            is FaceBackfillState.Failed -> {
+                                Text(state.message, fontSize = 13.sp, color = Color(0xFFD93025))
+                            }
+                        }
+
+                        Spacer(Modifier.height(12.dp))
+
+                        OutlinedButton(
+                            onClick = { startFaceBackfill() },
+                            enabled = faceBackfillState !is FaceBackfillState.Starting
+                        ) { Text("Scan now") }
                     }
                 }
             }
