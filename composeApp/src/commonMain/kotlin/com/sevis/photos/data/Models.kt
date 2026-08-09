@@ -44,6 +44,11 @@ data class AlbumResponse(
 @Serializable
 data class MessageResponse(val message: String)
 
+/** Result of one PhotoApi#scanFaces call — [remaining] tells the caller whether
+ *  another call would still find work to do (see AutoUpload on both platforms). */
+@Serializable
+data class FaceScanBatchResponse(val scanned: Int, val remaining: Long)
+
 /** A face detected within one photo, from photo-service's server-side
  *  face-service pipeline. Box coordinates are fractions (0..1) of the
  *  photo's width/height. */

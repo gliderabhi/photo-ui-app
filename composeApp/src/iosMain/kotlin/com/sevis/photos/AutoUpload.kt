@@ -138,10 +138,15 @@ private suspend fun syncNow() {
 
     val newMedia = fetchMediaSince(since.toLong())
     log("syncNow: found ${newMedia.size} item(s) newer than $since")
-    if (newMedia.isEmpty()) return
 
     val client = buildKtorClient()
     val photoApi = PhotoApi(API_BASE_URL, client)
+
+    if (newMedia.isEmpty()) {
+        runFaceScanBatch(photoApi)
+        return
+    }
+
     val videoApi = VideoApi(API_BASE_URL, client)
     var uploaded = 0
     var failed = 0
@@ -174,7 +179,18 @@ private suspend fun syncNow() {
     }
 
     defaults.setDouble(NSDate().timeIntervalSince1970, KEY_LAST_SYNC)
+    runFaceScanBatch(photoApi)
     log("syncNow complete: uploaded=$uploaded, failed=$failed, elapsed=${NSDate().timeIntervalSince1970 - startedAt}s")
+}
+
+// One batch per sync (not looped to drain the whole backlog — see SettingsScreen's
+// "Scan now" for that) — syncNow() already runs on app open and, best-effort, on
+// BGTaskScheduler's own timer, so a backlog clears gradually over successive runs
+// rather than any one run taking noticeably longer.
+private suspend fun runFaceScanBatch(photoApi: PhotoApi) {
+    runCatching { photoApi.scanFaces(limit = 10) }
+        .onSuccess { result -> log("Face scan batch: scanned=${result.scanned}, remaining=${result.remaining}") }
+        .onFailure { e -> log("Face scan batch failed: ${e::class.simpleName}: ${e.message}") }
 }
 
 private fun mimeTypeForFilename(filename: String, isVideo: Boolean): String {

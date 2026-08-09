@@ -60,15 +60,18 @@ class AutoUploadWorker(
         val newVideos = MediaStoreHelper.getVideosSince(applicationContext, sinceEpoch)
         Log.d(TAG, "Scanned MediaStore since epoch $sinceEpoch: ${newImages.size} image(s), ${newVideos.size} video(s)")
 
+        val client = buildHttpClient(token)
+        val photoApi = PhotoApi(BuildConfig.API_BASE_URL, client)
+
         if (newImages.isEmpty() && newVideos.isEmpty()) {
-            Log.d(TAG, "Nothing new — done in ${System.currentTimeMillis() - startedAt}ms")
+            Log.d(TAG, "Nothing new to upload")
+            runFaceScanBatch(photoApi)
+            Log.d(TAG, "Run complete: nothing to upload, elapsed=${System.currentTimeMillis() - startedAt}ms")
             return@withContext Result.success()
         }
 
         createNotificationChannel()
 
-        val client = buildHttpClient(token)
-        val photoApi = PhotoApi(BuildConfig.API_BASE_URL, client)
         val videoApi = VideoApi(BuildConfig.API_BASE_URL, client)
         var uploaded = 0
         var failed = 0
@@ -114,6 +117,8 @@ class AutoUploadWorker(
             .putLong(KEY_LAST_SYNC, System.currentTimeMillis() / 1000)
             .apply()
 
+        runFaceScanBatch(photoApi)
+
         Log.d(TAG, "Run complete: uploaded=$uploaded, failed=$failed, elapsed=${System.currentTimeMillis() - startedAt}ms")
 
         if (uploaded > 0) {
@@ -121,6 +126,16 @@ class AutoUploadWorker(
         }
 
         Result.success()
+    }
+
+    // One batch per run (not looped to drain the whole backlog — see SettingsScreen's
+    // "Scan now" for that) is plenty: this worker already re-runs every 15 minutes
+    // (see AutoUploadScheduler), so a backlog clears gradually over successive runs
+    // without any one run taking noticeably longer than an upload-only run would.
+    private suspend fun runFaceScanBatch(photoApi: PhotoApi) {
+        runCatching { photoApi.scanFaces(limit = 10) }
+            .onSuccess { result -> Log.d(TAG, "Face scan batch: scanned=${result.scanned}, remaining=${result.remaining}") }
+            .onFailure { e -> Log.w(TAG, "Face scan batch failed: ${e::class.simpleName}: ${e.message}") }
     }
 
     private fun buildHttpClient(token: String): HttpClient {

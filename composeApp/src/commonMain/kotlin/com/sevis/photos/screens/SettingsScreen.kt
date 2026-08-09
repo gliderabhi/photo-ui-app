@@ -21,11 +21,13 @@ import androidx.compose.ui.window.DialogProperties
 import com.sevis.photos.data.PhotoApi
 import kotlinx.coroutines.launch
 
-private sealed interface FaceBackfillState {
-    data object Idle : FaceBackfillState
-    data object Starting : FaceBackfillState
-    data object Started : FaceBackfillState
-    data class Failed(val message: String) : FaceBackfillState
+private sealed interface FaceScanState {
+    data object Idle : FaceScanState
+    /** [scannedSoFar] updates live as each batch call returns — scanFaces() is a
+     *  bounded per-call batch (see PhotoApi#scanFaces), so "Scan now" loops it. */
+    data class Scanning(val scannedSoFar: Int) : FaceScanState
+    data class Done(val totalScanned: Int) : FaceScanState
+    data class Failed(val message: String) : FaceScanState
 }
 
 private sealed interface UpdateCheckState {
@@ -55,14 +57,28 @@ fun SettingsScreen(
 ) {
     val scope = rememberCoroutineScope()
     var checkState by remember { mutableStateOf<UpdateCheckState>(UpdateCheckState.Idle) }
-    var faceBackfillState by remember { mutableStateOf<FaceBackfillState>(FaceBackfillState.Idle) }
+    var faceScanState by remember { mutableStateOf<FaceScanState>(FaceScanState.Idle) }
 
-    fun startFaceBackfill() {
-        faceBackfillState = FaceBackfillState.Starting
+    // Loops scanFaces() — each call only handles a small batch (see PhotoService#
+    // scanFaceBatch on the server), so a "scan everything now" tap needs to keep
+    // calling until the server reports nothing left. Capped at 50 iterations (with
+    // the default limit=10 per call, 500 photos) as a sanity bound, not because
+    // that's expected to be hit — auto-upload's own periodic calls (see AutoUpload
+    // on both platforms) would otherwise finish the rest anyway.
+    fun startFaceScan() {
+        faceScanState = FaceScanState.Scanning(0)
         scope.launch {
-            runCatching { api.backfillFaces() }
-                .onSuccess { faceBackfillState = FaceBackfillState.Started }
-                .onFailure { e -> faceBackfillState = FaceBackfillState.Failed(e.message ?: "Couldn't start face scan") }
+            var totalScanned = 0
+            for (iteration in 1..50) {
+                val result = runCatching { api.scanFaces(limit = 20) }.getOrElse { e ->
+                    faceScanState = FaceScanState.Failed(e.message ?: "Face scan failed")
+                    return@launch
+                }
+                totalScanned += result.scanned
+                faceScanState = FaceScanState.Scanning(totalScanned)
+                if (result.remaining <= 0L || result.scanned == 0) break
+            }
+            faceScanState = FaceScanState.Done(totalScanned)
         }
     }
 
@@ -172,16 +188,18 @@ fun SettingsScreen(
                         }
                     }
 
-                    // Face detection backfill card — detection only ever runs at upload
-                    // time, so this is the catch-up for anything already uploaded before
-                    // that existed (see PhotoService#backfillFaces).
+                    // Face detection card — detection is decoupled from upload entirely
+                    // now (see photo-service's PhotoService#scanFaceBatch): new photos
+                    // get picked up automatically in the background by auto-upload's own
+                    // periodic cycle (see AutoUpload on both platforms), and this button
+                    // just runs the same scan immediately instead of waiting for that.
                     SettingsCard {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             Icon(Icons.Default.Face, contentDescription = null, tint = Color(0xFF0A84FF))
                             Column {
-                                Text("Scan existing photos for faces", fontWeight = FontWeight.Medium, fontSize = 15.sp)
+                                Text("Scan photos for faces", fontWeight = FontWeight.Medium, fontSize = 15.sp)
                                 Text(
-                                    "People are detected automatically for new uploads — run this once to catch up photos uploaded earlier",
+                                    "Runs automatically in the background as photos sync — tap to scan right now instead of waiting",
                                     fontSize = 12.sp, color = Color(0xFF5F6368)
                                 )
                             }
@@ -189,21 +207,22 @@ fun SettingsScreen(
 
                         Spacer(Modifier.height(12.dp))
 
-                        when (val state = faceBackfillState) {
-                            is FaceBackfillState.Idle -> {}
-                            is FaceBackfillState.Starting -> {
+                        when (val state = faceScanState) {
+                            is FaceScanState.Idle -> {}
+                            is FaceScanState.Scanning -> {
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                                    Text("Starting…", fontSize = 13.sp, color = Color(0xFF5F6368))
+                                    Text("Scanning… ${state.scannedSoFar} so far", fontSize = 13.sp, color = Color(0xFF5F6368))
                                 }
                             }
-                            is FaceBackfillState.Started -> {
+                            is FaceScanState.Done -> {
                                 Text(
-                                    "Scan started — check the People tab in a bit",
+                                    if (state.totalScanned > 0) "Scanned ${state.totalScanned} photo${if (state.totalScanned != 1) "s" else ""}"
+                                    else "Nothing new to scan",
                                     fontSize = 13.sp, color = Color(0xFF1E8E3E)
                                 )
                             }
-                            is FaceBackfillState.Failed -> {
+                            is FaceScanState.Failed -> {
                                 Text(state.message, fontSize = 13.sp, color = Color(0xFFD93025))
                             }
                         }
@@ -211,8 +230,8 @@ fun SettingsScreen(
                         Spacer(Modifier.height(12.dp))
 
                         OutlinedButton(
-                            onClick = { startFaceBackfill() },
-                            enabled = faceBackfillState !is FaceBackfillState.Starting
+                            onClick = { startFaceScan() },
+                            enabled = faceScanState !is FaceScanState.Scanning
                         ) { Text("Scan now") }
                     }
                 }
