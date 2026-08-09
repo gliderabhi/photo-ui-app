@@ -35,12 +35,15 @@ class AutoUploadWorker(
     }
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+        val startedAt = System.currentTimeMillis()
+        Log.d(TAG, "Run starting (id=$id, tags=$tags)")
+
         val prefs = applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val token = prefs.getString("token", null)
         val folderPwd = prefs.getString("folder_password", null)
 
         if (token == null || folderPwd == null) {
-            Log.d(TAG, "Skipping — not authenticated")
+            Log.d(TAG, "Skipping — not authenticated (token=${token != null}, folderPassword=${folderPwd != null})")
             return@withContext Result.success()
         }
 
@@ -55,41 +58,54 @@ class AutoUploadWorker(
         val sinceEpoch = prefs.getLong(KEY_LAST_SYNC, 0L)
         val newImages = MediaStoreHelper.getImagesSince(applicationContext, sinceEpoch)
         val newVideos = MediaStoreHelper.getVideosSince(applicationContext, sinceEpoch)
+        Log.d(TAG, "Scanned MediaStore since epoch $sinceEpoch: ${newImages.size} image(s), ${newVideos.size} video(s)")
 
         if (newImages.isEmpty() && newVideos.isEmpty()) {
-            Log.d(TAG, "No new media since $sinceEpoch")
+            Log.d(TAG, "Nothing new — done in ${System.currentTimeMillis() - startedAt}ms")
             return@withContext Result.success()
         }
 
-        Log.d(TAG, "Found ${newImages.size} new images and ${newVideos.size} new videos to upload")
         createNotificationChannel()
 
         val client = buildHttpClient(token)
         val photoApi = PhotoApi(BuildConfig.API_BASE_URL, client)
         val videoApi = VideoApi(BuildConfig.API_BASE_URL, client)
         var uploaded = 0
+        var failed = 0
 
         newImages.forEach { image ->
-            val bytes = MediaStoreHelper.readBytes(applicationContext, image.uri) ?: return@forEach
+            val bytes = MediaStoreHelper.readBytes(applicationContext, image.uri)
+            if (bytes == null) {
+                Log.w(TAG, "Skipping ${image.name} — couldn't read bytes from ${image.uri}")
+                return@forEach
+            }
+            Log.d(TAG, "Uploading image ${image.name} (${bytes.size} bytes, ${image.mimeType})…")
             runCatching { photoApi.uploadImage(bytes, image.name, image.mimeType) }
-                .onSuccess {
+                .onSuccess { response ->
                     uploaded++
-                    Log.d(TAG, "Uploaded ${image.name}")
+                    Log.d(TAG, "Uploaded ${image.name} -> photo id=${response.id}")
                 }
                 .onFailure { e ->
-                    Log.w(TAG, "Failed to upload ${image.name}: ${e.message}")
+                    failed++
+                    Log.w(TAG, "Failed to upload ${image.name}: ${e::class.simpleName}: ${e.message}")
                 }
         }
 
         newVideos.forEach { video ->
-            val bytes = MediaStoreHelper.readBytes(applicationContext, video.uri) ?: return@forEach
+            val bytes = MediaStoreHelper.readBytes(applicationContext, video.uri)
+            if (bytes == null) {
+                Log.w(TAG, "Skipping ${video.name} — couldn't read bytes from ${video.uri}")
+                return@forEach
+            }
+            Log.d(TAG, "Uploading video ${video.name} (${bytes.size} bytes, ${video.mimeType})…")
             runCatching { videoApi.uploadVideo(bytes, video.name, video.mimeType) }
-                .onSuccess {
+                .onSuccess { response ->
                     uploaded++
-                    Log.d(TAG, "Uploaded ${video.name}")
+                    Log.d(TAG, "Uploaded ${video.name} -> video id=${response.id}")
                 }
                 .onFailure { e ->
-                    Log.w(TAG, "Failed to upload ${video.name}: ${e.message}")
+                    failed++
+                    Log.w(TAG, "Failed to upload ${video.name}: ${e::class.simpleName}: ${e.message}")
                 }
         }
 
@@ -97,6 +113,8 @@ class AutoUploadWorker(
         prefs.edit()
             .putLong(KEY_LAST_SYNC, System.currentTimeMillis() / 1000)
             .apply()
+
+        Log.d(TAG, "Run complete: uploaded=$uploaded, failed=$failed, elapsed=${System.currentTimeMillis() - startedAt}ms")
 
         if (uploaded > 0) {
             showCompletionNotification(uploaded)

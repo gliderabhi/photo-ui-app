@@ -45,7 +45,11 @@ object MediaStoreHelper {
         )
         val selection = "${MediaStore.Video.Media.DATE_ADDED} > ?"
         val selectionArgs = arrayOf(sinceEpochSeconds.toString())
-        val sortOrder = "${MediaStore.Video.Media.DATE_ADDED} ASC"
+        // Newest first — on a big first-ever sync (whole existing library, see
+        // AutoUploadWorker's KEY_LAST_SYNC comment) the most recent videos land on the
+        // server first instead of the user waiting through the entire old backlog before
+        // anything current shows up.
+        val sortOrder = "${MediaStore.Video.Media.DATE_ADDED} DESC"
 
         context.contentResolver.query(
             MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
@@ -86,7 +90,8 @@ object MediaStoreHelper {
         )
         val selection = "${MediaStore.Images.Media.DATE_ADDED} > ?"
         val selectionArgs = arrayOf(sinceEpochSeconds.toString())
-        val sortOrder = "${MediaStore.Images.Media.DATE_ADDED} ASC"
+        // Newest first — see getVideosSince()'s comment above.
+        val sortOrder = "${MediaStore.Images.Media.DATE_ADDED} DESC"
 
         context.contentResolver.query(
             MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
