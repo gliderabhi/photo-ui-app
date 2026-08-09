@@ -15,6 +15,30 @@ import kotlinx.serialization.json.put
 fun Throwable.isUnauthorized(): Boolean =
     this is ClientRequestException && response.status == HttpStatusCode.Unauthorized
 
+/** True if this came from a 404 — user-service's googleLogin returns this for a brand new
+ *  Google identity (no account by that email at all yet). See isForbidden() for the other
+ *  "needs signup" case, and AuthService#googleLogin for both. */
+fun Throwable.isNotFound(): Boolean =
+    this is ClientRequestException && response.status == HttpStatusCode.NotFound
+
+/** True if this came from a 403 — user-service's googleLogin returns this when the email
+ *  already has an account (from another app, e.g. Sevis CRM or RoomList) but no role for
+ *  *this* app specifically yet. Combined with isNotFound(), covers both of
+ *  AuthService#resolveRole's "needs signup" outcomes — both are resolved the identical way,
+ *  by collecting a name and calling completeGoogleSignup(). */
+fun Throwable.isForbidden(): Boolean =
+    this is ClientRequestException && response.status == HttpStatusCode.Forbidden
+
+/** True if googleLogin() failed for either reason a caller should show
+ *  GoogleCompleteSignupForm instead of a plain error — see isNotFound()/isForbidden(). */
+fun Throwable.needsGoogleSignupCompletion(): Boolean = isNotFound() || isForbidden()
+
+/** user-service is shared across several apps (Sevis CRM, RoomList, Photos, …) and scopes
+ *  Google identities' roles per app via this id — see AuthService's normalizeAppId/
+ *  UserAppRole. Must stay in sync with whatever value (if any) the backend has already
+ *  provisioned for Photos users under. */
+const val PHOTOS_APP_ID = "PHOTOS"
+
 class PhotoApi(private val baseUrl: String, val client: HttpClient) {
 
     // Authorization is already added to every request by the shared client's
@@ -45,6 +69,23 @@ class PhotoApi(private val baseUrl: String, val client: HttpClient) {
             setBody(buildJsonObject {
                 put("idToken", idToken)
                 put("longLived", longLived)
+                put("appId", PHOTOS_APP_ID)
+            })
+        }.body()
+
+    /** Finishes signup for a Google identity googleLogin() reported 404 (isNotFound()) for
+     *  — see GoogleCompleteSignupForm. idToken is re-verified server-side; only [name] is
+     *  actually collected from the user, everything else about this account is fixed for
+     *  a consumer app like Photos (no dealer/company fields to ask for). */
+    suspend fun completeGoogleSignup(idToken: String, name: String): AuthResponse =
+        client.post("$baseUrl/user-service/api/auth/google/complete") {
+            contentType(ContentType.Application.Json)
+            setBody(buildJsonObject {
+                put("idToken", idToken)
+                put("name", name)
+                put("role", "CUSTOMER")
+                put("accountType", "INDIVIDUAL")
+                put("appId", PHOTOS_APP_ID)
             })
         }.body()
 

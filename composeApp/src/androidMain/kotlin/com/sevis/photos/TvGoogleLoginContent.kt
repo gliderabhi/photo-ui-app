@@ -20,6 +20,8 @@ import androidx.compose.ui.unit.sp
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
 import com.sevis.photos.data.PhotoApi
+import com.sevis.photos.data.needsGoogleSignupCompletion
+import com.sevis.photos.screens.GoogleCompleteSignupForm
 import kotlinx.coroutines.delay
 
 /**
@@ -33,6 +35,8 @@ fun TvGoogleLoginContent(api: PhotoApi, onLoginSuccess: (String) -> Unit) {
     var verificationUrl by remember { mutableStateOf<String?>(null) }
     var qrBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    // Set once googleLogin() reports 404 — see MobileGoogleLoginContent's identical handling.
+    var pendingIdToken by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         try {
@@ -51,8 +55,12 @@ fun TvGoogleLoginContent(api: PhotoApi, onLoginSuccess: (String) -> Unit) {
                 delay(device.interval * 1000L)
                 val idToken = GoogleDeviceAuth.pollOnce(device.device_code)
                 if (idToken != null) {
-                    val auth = api.googleLogin(idToken, longLived = true)
-                    onLoginSuccess(auth.token)
+                    try {
+                        val auth = api.googleLogin(idToken, longLived = true)
+                        onLoginSuccess(auth.token)
+                    } catch (e: Exception) {
+                        if (e.needsGoogleSignupCompletion()) pendingIdToken = idToken else throw e
+                    }
                     return@LaunchedEffect
                 }
             }
@@ -60,6 +68,16 @@ fun TvGoogleLoginContent(api: PhotoApi, onLoginSuccess: (String) -> Unit) {
         } catch (e: Exception) {
             error = e.message ?: "Google sign-in failed"
         }
+    }
+
+    if (pendingIdToken != null) {
+        GoogleCompleteSignupForm(
+            api = api,
+            idToken = pendingIdToken!!,
+            onComplete = onLoginSuccess,
+            onCancel = { pendingIdToken = null },
+        )
+        return
     }
 
     Column(

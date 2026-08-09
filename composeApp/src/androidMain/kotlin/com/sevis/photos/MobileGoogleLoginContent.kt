@@ -1,6 +1,5 @@
 package com.sevis.photos
 
-import android.util.Log
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
@@ -19,6 +18,8 @@ import androidx.credentials.exceptions.GetCredentialException
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.sevis.photos.data.PhotoApi
+import com.sevis.photos.data.needsGoogleSignupCompletion
+import com.sevis.photos.screens.GoogleCompleteSignupForm
 
 /**
  * Native "Sign in with Google" for phones/tablets via Credential Manager — the
@@ -31,6 +32,10 @@ fun MobileGoogleLoginContent(api: PhotoApi, onLoginSuccess: (String) -> Unit) {
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var attempt by remember { mutableStateOf(0) }
+    // Set once googleLogin() reports 404 — this identity has no role in Photos yet, so
+    // GoogleCompleteSignupForm takes over instead of treating it as a real error (see
+    // user-service's AuthService#googleLogin/PhotoApi.isNotFound()).
+    var pendingIdToken by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(attempt) {
         loading = true
@@ -40,6 +45,10 @@ fun MobileGoogleLoginContent(api: PhotoApi, onLoginSuccess: (String) -> Unit) {
             loading = false
             return@LaunchedEffect
         }
+        // Declared outside the try so the isNotFound() catch below — reached only after
+        // this was already successfully obtained from Credential Manager — can still
+        // hand it off to GoogleCompleteSignupForm.
+        var googleIdToken: String? = null
         try {
             val option = GetGoogleIdOption.Builder()
                 .setFilterByAuthorizedAccounts(false)
@@ -48,7 +57,8 @@ fun MobileGoogleLoginContent(api: PhotoApi, onLoginSuccess: (String) -> Unit) {
             val request = GetCredentialRequest.Builder().addCredentialOption(option).build()
             val result = CredentialManager.create(context).getCredential(context, request)
             val googleCredential = GoogleIdTokenCredential.createFrom(result.credential.data)
-            val auth = api.googleLogin(googleCredential.idToken, longLived = true)
+            googleIdToken = googleCredential.idToken
+            val auth = api.googleLogin(googleIdToken, longLived = true)
             onLoginSuccess(auth.token)
         } catch (e: GetCredentialCancellationException) {
             // User backed out of the account picker — not a real error, just
@@ -60,10 +70,27 @@ fun MobileGoogleLoginContent(api: PhotoApi, onLoginSuccess: (String) -> Unit) {
             error = e.message?.takeIf { it.isNotBlank() } ?: "Google sign-in failed (${e.type})"
             loading = false
         } catch (e: Exception) {
-            error = e.message?.takeIf { it.isNotBlank() } ?: "Google sign-in failed: ${e::class.simpleName}"
-            loading = false
+            val token = googleIdToken
+            if (e.needsGoogleSignupCompletion() && token != null) {
+                loading = false
+                pendingIdToken = token
+            } else {
+                error = e.message?.takeIf { it.isNotBlank() } ?: "Google sign-in failed: ${e::class.simpleName}"
+                loading = false
+            }
         }
     }
+
+    if (pendingIdToken != null) {
+        GoogleCompleteSignupForm(
+            api = api,
+            idToken = pendingIdToken!!,
+            onComplete = onLoginSuccess,
+            onCancel = { pendingIdToken = null; attempt++ },
+        )
+        return
+    }
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -78,7 +105,6 @@ fun MobileGoogleLoginContent(api: PhotoApi, onLoginSuccess: (String) -> Unit) {
                 }
             }
             else -> {
-                Log.d("TAG", "MobileGoogleLoginContent: Instead of completing stuck here")
                 OutlinedButton(onClick = { attempt++ }, modifier = Modifier.fillMaxWidth()) {
                     Text("Sign in with Google")
                 }

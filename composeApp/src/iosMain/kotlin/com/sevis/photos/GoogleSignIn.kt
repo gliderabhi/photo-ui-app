@@ -19,42 +19,64 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sevis.photos.data.PhotoApi
+import com.sevis.photos.data.needsGoogleSignupCompletion
+import com.sevis.photos.screens.GoogleCompleteSignupForm
 import kotlinx.coroutines.launch
 
 /** iOS's counterpart to MobileGoogleLoginContent — same shape/behavior (loading
- *  spinner, retry-on-cancel, error with retry), Google's own OAuth flow instead
+ *  spinner, retry-on-cancel, error with retry, and now the shared "complete your
+ *  signup" step for a first-time Photos identity), Google's own OAuth flow instead
  *  of Android's Credential Manager. See GoogleAuth.kt for the actual sign-in call. */
 @Composable
 fun GoogleSignInButton(api: PhotoApi, onLoginSuccess: (String) -> Unit) {
     val scope = rememberCoroutineScope()
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    // Set once googleLogin() reports 404 — this identity has no role in Photos yet (see
+    // user-service's AuthService#googleLogin/PhotoApi.isNotFound()).
+    var pendingIdToken by remember { mutableStateOf<String?>(null) }
 
     fun start() {
         loading = true
         error = null
         scope.launch {
-            runCatching {
-                val idToken = signInWithGoogle() ?: return@runCatching null // user cancelled
-                // Google's id_token identifies the user to Google, not to our backend — it
-                // has to be exchanged for our own signed session JWT (same as Android's
-                // MobileGoogleLoginContent) before it's usable as AppState.token. Skipping
-                // this and using idToken directly is exactly what caused the "sign in
-                // succeeds, then immediately bounces back to Login" bug: the gateway's JWT
-                // filter can't verify a Google-signed token against our HMAC secret, so the
-                // very next authenticated request (FolderCheckScreen's getFolderStatus) gets
-                // a 401 and FolderCheckScreen logs the user back out.
-                api.googleLogin(idToken, longLived = true).token
+            val signInResult = runCatching { signInWithGoogle() }
+            val idToken = signInResult.getOrNull()
+            if (signInResult.isFailure) {
+                loading = false
+                val e = signInResult.exceptionOrNull()
+                error = e?.message?.takeIf { it.isNotBlank() } ?: "Google sign-in failed"
+                return@launch
             }
+            if (idToken == null) {
+                loading = false // user cancelled — quietly back to idle, not an error
+                return@launch
+            }
+
+            runCatching { api.googleLogin(idToken, longLived = true).token }
                 .onSuccess { appToken ->
                     loading = false
-                    if (appToken != null) onLoginSuccess(appToken)
+                    onLoginSuccess(appToken)
                 }
                 .onFailure { e ->
                     loading = false
-                    error = e.message?.takeIf { it.isNotBlank() } ?: "Google sign-in failed"
+                    if (e.needsGoogleSignupCompletion()) {
+                        pendingIdToken = idToken
+                    } else {
+                        error = e.message?.takeIf { it.isNotBlank() } ?: "Google sign-in failed"
+                    }
                 }
         }
+    }
+
+    if (pendingIdToken != null) {
+        GoogleCompleteSignupForm(
+            api = api,
+            idToken = pendingIdToken!!,
+            onComplete = onLoginSuccess,
+            onCancel = { pendingIdToken = null },
+        )
+        return
     }
 
     Column(
