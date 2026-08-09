@@ -57,6 +57,7 @@ import com.sevis.photos.ui.GlassColors
 import com.sevis.photos.ui.GlassPageBackground
 import com.sevis.photos.ui.GlassSurface
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import platform.Foundation.NSDate
@@ -90,11 +91,18 @@ fun LocalLibraryScreen(groupByPlace: Boolean, api: PhotoApi) {
 
     // Filenames already on the server — badges the matching cells below with a small
     // cloud icon instead of maintaining a separate "Cloud Gallery" pane (see
-    // uploadedFilenamesFrom()). Fetched once; if it fails (e.g. folder still locked)
-    // the grid just shows no badges rather than erroring the whole screen.
+    // uploadedFilenamesFrom()). Re-fetched periodically, not just once: auto-upload
+    // runs in the background while this screen is sitting open (a large first-ever
+    // backlog can take a long time), so a one-time fetch went stale immediately and
+    // newly-uploaded photos never picked up their badge until the screen was left and
+    // re-entered. If a fetch fails (e.g. folder still locked) the grid just keeps
+    // showing no badges rather than erroring the whole screen.
     var uploadedFilenames by remember { mutableStateOf<Set<String>>(emptySet()) }
     LaunchedEffect(Unit) {
-        runCatching { api.listPhotos() }.onSuccess { uploadedFilenames = uploadedFilenamesFrom(it) }
+        while (true) {
+            runCatching { api.listPhotos() }.onSuccess { uploadedFilenames = uploadedFilenamesFrom(it) }
+            delay(20_000)
+        }
     }
 
     if (!hasPermission) {

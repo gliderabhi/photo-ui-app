@@ -31,6 +31,17 @@ class AutoUploadWorker(
         private const val KEY_LAST_SYNC = "auto_upload_last_sync"
         private const val CHANNEL_ID = "auto_upload_channel"
         private const val NOTIF_ID = 1001
+        // How often (in successfully-uploaded photos) to run a face-scan batch and post
+        // a progress notification during one run — on a big first-ever backlog (found
+        // 4048 images in one real run), waiting for the *entire* upload loop to finish
+        // before face-scan ever gets a turn, or before the user sees any progress at
+        // all beyond the initial "Uploading…" toast, is a long wait for both. NOT used
+        // to advance KEY_LAST_SYNC early — images are fetched newest-first (see
+        // MediaStoreHelper), so at any checkpoint mid-loop the *older*, not-yet-attempted
+        // tail is still exactly what's below the original sinceEpoch; advancing the
+        // cursor before the whole snapshot finishes would risk silently skipping
+        // whatever's left if the worker gets killed partway through.
+        private const val CHECKPOINT_EVERY = 100
     }
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
@@ -83,11 +94,11 @@ class AutoUploadWorker(
         var uploaded = 0
         var failed = 0
 
-        newImages.forEach { image ->
+        newImages.forEachIndexed { index, image ->
             val bytes = MediaStoreHelper.readBytes(applicationContext, image.uri)
             if (bytes == null) {
                 Log.w(TAG, "Skipping ${image.name} — couldn't read bytes from ${image.uri}")
-                return@forEach
+                return@forEachIndexed
             }
             Log.d(TAG, "Uploading image ${image.name} (${bytes.size} bytes, ${image.mimeType})…")
             runCatching { photoApi.uploadImage(bytes, image.name, image.mimeType) }
@@ -99,6 +110,12 @@ class AutoUploadWorker(
                     failed++
                     Log.w(TAG, "Failed to upload ${image.name}: ${e::class.simpleName}: ${e.message}")
                 }
+
+            if ((index + 1) % CHECKPOINT_EVERY == 0) {
+                Log.d(TAG, "Checkpoint: ${index + 1}/${newImages.size} processed (uploaded=$uploaded, failed=$failed)")
+                showProgressNotification(index + 1, newImages.size)
+                runFaceScanBatch(photoApi)
+            }
         }
 
         // Update last sync time to now
@@ -115,6 +132,18 @@ class AutoUploadWorker(
         }
 
         Result.success()
+    }
+
+    private fun showProgressNotification(done: Int, total: Int) {
+        val nm = applicationContext.getSystemService(NotificationManager::class.java)
+        val notif = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_menu_upload)
+            .setContentTitle("Syncing photos…")
+            .setContentText("$done of $total")
+            .setProgress(total, done, false)
+            .setOngoing(true)
+            .build()
+        nm.notify(NOTIF_ID, notif)
     }
 
     // One batch per run (not looped to drain the whole backlog — see SettingsScreen's

@@ -26,6 +26,9 @@ private fun log(message: String) = NSLog("AutoUpload: $message")
 private const val BG_TASK_ID = "com.sevis.photos.autoupload"
 private const val KEY_LAST_SYNC = "auto_upload_last_sync"
 private const val MIN_REFRESH_INTERVAL_SECONDS = 15.0 * 60.0
+// How often (in successfully-attempted photos) to run a face-scan batch mid-loop — see
+// its use in syncNow() below and AutoUploadWorker's matching CHECKPOINT_EVERY on Android.
+private const val CHECKPOINT_EVERY = 100
 
 private val autoUploadScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -168,25 +171,36 @@ private suspend fun syncNow() = withContext(Dispatchers.Default) {
     var uploaded = 0
     var failed = 0
 
-    newMedia.forEach { item ->
+    newMedia.forEachIndexed { index, item ->
         val exported = exportOriginal(item.id)
         if (exported == null) {
             failed++
             log("Skipping ${item.id} — exportOriginal() returned nothing")
-            return@forEach
+            return@forEachIndexed
         }
         val (path, filename) = exported
         val bytes = readBytesAtPath("file://$path")
         if (bytes == null) {
             failed++
             log("Skipping $filename — couldn't read bytes from $path")
-            return@forEach
+            return@forEachIndexed
         }
         val mimeType = mimeTypeForFilename(filename, isVideo = false)
         log("Uploading image $filename (${bytes.size} bytes, $mimeType)…")
         runCatching { photoApi.uploadImage(bytes, filename, mimeType) }
             .onSuccess { response -> uploaded++; log("Uploaded $filename -> photo id=${response.id}") }
             .onFailure { e -> failed++; log("Failed to upload $filename: ${e::class.simpleName}: ${e.message}") }
+
+        // On a big first-ever backlog (found 4048 images in one real run), waiting for
+        // the *entire* upload loop to finish before face-scan ever gets a turn is a
+        // long wait — see AutoUploadWorker's CHECKPOINT_EVERY, same reasoning. Doesn't
+        // touch KEY_LAST_SYNC early for the same reason that comment gives: newMedia is
+        // newest-first, so the not-yet-attempted tail is always the older, unadvanced
+        // side of the original cursor until the whole snapshot finishes.
+        if ((index + 1) % CHECKPOINT_EVERY == 0) {
+            log("Checkpoint: ${index + 1}/${newMedia.size} processed (uploaded=$uploaded, failed=$failed)")
+            runFaceScanBatch(photoApi)
+        }
     }
 
     defaults.setDouble(NSDate().timeIntervalSince1970, KEY_LAST_SYNC)

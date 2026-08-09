@@ -66,6 +66,22 @@ fun PeopleScreen(api: PhotoApi, baseUrl: String, onBack: () -> Unit, onPersonCli
             runCatching { api.listPeople() }.onSuccess { people = it }
             loading = false
         }
+        // Nudges detection forward whenever this screen opens, rather than only
+        // relying on auto-upload's own cycle — that cycle calls scanFaces() just
+        // once per sync, *after* every upload in that run finishes, so a big
+        // first-ever backlog (hundreds/thousands of photos) can leave it not
+        // running for a long time. Loops a few batches in the background (not
+        // blocking the list above) and refreshes people as each one turns up
+        // something, so newly-detected people appear without leaving this screen.
+        scope.launch {
+            for (iteration in 1..10) {
+                val result = runCatching { api.scanFaces(limit = 20) }.getOrNull() ?: break
+                if (result.scanned > 0) {
+                    runCatching { api.listPeople() }.onSuccess { people = it }
+                }
+                if (result.remaining <= 0L || result.scanned == 0) break
+            }
+        }
     }
 
     Column(modifier = Modifier.fillMaxSize().background(com.sevis.photos.ui.GlassPageBackground)) {
