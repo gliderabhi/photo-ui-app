@@ -14,6 +14,12 @@ struct iOSApp: App {
         if !AppConfigKt.GOOGLE_IOS_CLIENT_ID.isEmpty {
             GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: AppConfigKt.GOOGLE_IOS_CLIENT_ID)
             GoogleNativeSignInKt.googleNativeSignIn = GoogleSignInBridge()
+            // Loads any previously signed-in Google session from Keychain, if one exists,
+            // so GoogleSignInBridge.swift can reuse it silently instead of presenting the
+            // sheet again on every re-login (e.g. after our own JWT expires or the user
+            // logs out and back in) — see that file's doc comment. Fire-and-forget: if
+            // there's nothing to restore (first-ever sign-in) this just no-ops.
+            GIDSignIn.sharedInstance.restorePreviousSignIn { _, _ in }
         }
     }
 
