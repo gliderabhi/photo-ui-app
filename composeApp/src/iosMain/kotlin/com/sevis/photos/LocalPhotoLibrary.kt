@@ -2,6 +2,8 @@ package com.sevis.photos
 
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import platform.CoreGraphics.CGSizeMake
 import platform.Foundation.*
 import platform.Photos.*
@@ -139,20 +141,37 @@ fun thumbnailFileForId(id: String): String? {
     return thumbnailFile(asset)
 }
 
+// Process-lifetime cache for assetFilenameForId() below, keyed by asset id — without
+// it, scrolling a LazyVerticalGrid back and forth re-triggers the same PHAssetResource
+// lookup every time a cell scrolls back into view (Compose disposes off-screen grid
+// cells' composables, so a plain remember{} inside the cell doesn't survive that the
+// way this top-level cache does), which was visible as scroll stutter/jumpiness once
+// enough cells needed it at once. Filenames never change for a given asset id, so
+// there's no invalidation to worry about. Guarded by a Mutex since lookups happen
+// concurrently from Dispatchers.Default across multiple visible cells.
+private val filenameCacheMutex = Mutex()
+private val filenameCache = mutableMapOf<String, String>()
+
 /** The asset's real original filename (e.g. "IMG_1234.HEIC") — [LocalMedia.displayName] is
  *  deliberately *not* this (it's a cheap slice of the stable localIdentifier instead, see
  *  fetchMedia()'s doc comment), so this is resolved lazily per visible cell, the same way
  *  thumbnailFileForId() resolves thumbnails. Used to badge Gallery cells already uploaded
  *  to the server (see uploadedFilenamesFrom() and rememberIsUploaded() in
  *  LocalGalleryScreens.kt) — a PHAssetResource lookup is metadata-only (no image decode),
- *  but still real cross-process work, so it's not done eagerly for the whole library. */
+ *  but still real cross-process work, so it's cached (see filenameCache above) rather than
+ *  redone every time a cell re-enters composition. */
 @OptIn(ExperimentalForeignApi::class)
-fun assetFilenameForId(id: String): String? {
+suspend fun assetFilenameForId(id: String): String? {
+    filenameCacheMutex.withLock { filenameCache[id] }?.let { return it }
+
     val result = PHAsset.fetchAssetsWithLocalIdentifiers(listOf(id), PHFetchOptions())
     val asset = result.objectAtIndex(0U) as? PHAsset ?: return null
     @Suppress("UNCHECKED_CAST")
     val resources = PHAssetResource.assetResourcesForAsset(asset) as List<PHAssetResource>
-    return resources.firstOrNull()?.originalFilename
+    val filename = resources.firstOrNull()?.originalFilename ?: return null
+
+    filenameCacheMutex.withLock { filenameCache[id] = filename }
+    return filename
 }
 
 /**

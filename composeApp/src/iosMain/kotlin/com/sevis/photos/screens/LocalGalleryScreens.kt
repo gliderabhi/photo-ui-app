@@ -210,10 +210,13 @@ private fun rememberThumbnailPath(id: String): String? {
 /** Whether this asset's real filename (resolved lazily — see assetFilenameForId()) is
  *  already on the server. Skips the PHAssetResource lookup entirely when
  *  [uploadedFilenames] is empty (folder locked / not fetched yet / nothing uploaded), the
- *  common case for most sessions. */
+ *  common case for most sessions, and — via [start] — until the cell's thumbnail has
+ *  already resolved: firing both lookups the instant a cell scrolls into view doubled up
+ *  the concurrent native work for every newly-visible cell at once, which was visible as
+ *  scroll stutter; staggering them spreads that work out instead. */
 @Composable
-private fun rememberIsUploaded(id: String, uploadedFilenames: Set<String>): Boolean {
-    if (uploadedFilenames.isEmpty()) return false
+private fun rememberIsUploaded(id: String, uploadedFilenames: Set<String>, start: Boolean): Boolean {
+    if (uploadedFilenames.isEmpty() || !start) return false
     val filename by produceState<String?>(initialValue = null, id) {
         value = withContext(Dispatchers.Default) { assetFilenameForId(id) }
     }
@@ -227,7 +230,7 @@ internal fun LazyGridScope.photoGridItems(
 ) {
     items(photos, key = { it.id }) { photo ->
         val path = rememberThumbnailPath(photo.id)
-        val isUploaded = rememberIsUploaded(photo.id, uploadedFilenames)
+        val isUploaded = rememberIsUploaded(photo.id, uploadedFilenames, start = path != null)
         Box(modifier = Modifier.fillMaxWidth().aspectRatio(1f).clickable { onPhotoClick(photo) }) {
             if (path != null) {
                 AsyncImage(

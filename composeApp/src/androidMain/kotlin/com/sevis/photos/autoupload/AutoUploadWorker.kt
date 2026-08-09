@@ -10,7 +10,6 @@ import androidx.work.*
 import com.sevis.photos.AppState
 import com.sevis.photos.BuildConfig
 import com.sevis.photos.data.PhotoApi
-import com.sevis.photos.data.VideoApi
 import io.ktor.client.*
 import io.ktor.client.engine.android.*
 import io.ktor.client.plugins.contentnegotiation.*
@@ -57,13 +56,22 @@ class AutoUploadWorker(
         // existing library, not just whatever's taken in the next minute.
         val sinceEpoch = prefs.getLong(KEY_LAST_SYNC, 0L)
         val newImages = MediaStoreHelper.getImagesSince(applicationContext, sinceEpoch)
-        val newVideos = MediaStoreHelper.getVideosSince(applicationContext, sinceEpoch)
-        Log.d(TAG, "Scanned MediaStore since epoch $sinceEpoch: ${newImages.size} image(s), ${newVideos.size} video(s)")
+        // Videos are temporarily NOT auto-uploaded — readBytes() below loads a file
+        // entirely into one ByteArray, and a real-world video (a 212MB .MOV triggered
+        // this) is both a genuine OOM risk on its own and, separately, doomed to fail
+        // regardless: photos.sevis.store is fronted by a cloudflared tunnel, which caps
+        // request bodies well under photo-service's own 2GB server.servlet.multipart
+        // limit — the upload was failing with NSURLErrorDomain -1017 "cannot parse
+        // response" / connection reset, consistent with Cloudflare closing the
+        // connection mid-upload rather than a bug in this client. Re-enable once
+        // uploads are chunked/resumable or routed around the tunnel's size limit —
+        // don't just remove this comment and flip videos back on without one of those.
+        Log.d(TAG, "Scanned MediaStore since epoch $sinceEpoch: ${newImages.size} image(s) (video auto-upload disabled)")
 
         val client = buildHttpClient(token)
         val photoApi = PhotoApi(BuildConfig.API_BASE_URL, client)
 
-        if (newImages.isEmpty() && newVideos.isEmpty()) {
+        if (newImages.isEmpty()) {
             Log.d(TAG, "Nothing new to upload")
             runFaceScanBatch(photoApi)
             Log.d(TAG, "Run complete: nothing to upload, elapsed=${System.currentTimeMillis() - startedAt}ms")
@@ -72,7 +80,6 @@ class AutoUploadWorker(
 
         createNotificationChannel()
 
-        val videoApi = VideoApi(BuildConfig.API_BASE_URL, client)
         var uploaded = 0
         var failed = 0
 
@@ -91,24 +98,6 @@ class AutoUploadWorker(
                 .onFailure { e ->
                     failed++
                     Log.w(TAG, "Failed to upload ${image.name}: ${e::class.simpleName}: ${e.message}")
-                }
-        }
-
-        newVideos.forEach { video ->
-            val bytes = MediaStoreHelper.readBytes(applicationContext, video.uri)
-            if (bytes == null) {
-                Log.w(TAG, "Skipping ${video.name} — couldn't read bytes from ${video.uri}")
-                return@forEach
-            }
-            Log.d(TAG, "Uploading video ${video.name} (${bytes.size} bytes, ${video.mimeType})…")
-            runCatching { videoApi.uploadVideo(bytes, video.name, video.mimeType) }
-                .onSuccess { response ->
-                    uploaded++
-                    Log.d(TAG, "Uploaded ${video.name} -> video id=${response.id}")
-                }
-                .onFailure { e ->
-                    failed++
-                    Log.w(TAG, "Failed to upload ${video.name}: ${e::class.simpleName}: ${e.message}")
                 }
         }
 

@@ -1,12 +1,12 @@
 package com.sevis.photos
 
 import com.sevis.photos.data.PhotoApi
-import com.sevis.photos.data.VideoApi
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import platform.BackgroundTasks.BGAppRefreshTaskRequest
 import platform.BackgroundTasks.BGTask
 import platform.BackgroundTasks.BGTaskScheduler
@@ -120,12 +120,20 @@ suspend fun syncOnAppOpen() {
  *  file (see LocalPhotoLibrary.exportOriginal) — same incremental approach as
  *  AutoUploadWorker.doWork() on Android, just PHPhotoLibrary instead of MediaStore.
  *  fetchMediaSince() already returns newest-first (see LocalPhotoLibrary.fetchMedia's sort
- *  descriptor), so on a big backlog the most recent photos land on the server first. */
-private suspend fun syncNow() {
+ *  descriptor), so on a big backlog the most recent photos land on the server first.
+ *
+ *  Wrapped in withContext(Dispatchers.Default) rather than trusting every caller to
+ *  already be on a background dispatcher — the BGTaskScheduler path (autoUploadScope)
+ *  already was, but syncOnAppOpen() is called from a plain LaunchedEffect in
+ *  MainViewController, which runs on the Main dispatcher by default. Everything in here
+ *  (fetchMediaSince's PHPhotoLibrary queries, readBytesAtPath's synchronous file reads,
+ *  the multi-megabyte uploads themselves) is blocking/CPU work that has no business
+ *  running on the UI thread regardless of which path called it. */
+private suspend fun syncNow() = withContext(Dispatchers.Default) {
     val startedAt = NSDate().timeIntervalSince1970
     if (AppState.token == null || AppState.folderPassword == null) {
         log("syncNow: skipping — not authenticated (token=${AppState.token != null}, folderPassword=${AppState.folderPassword != null})")
-        return
+        return@withContext
     }
 
     val defaults = NSUserDefaults.standardUserDefaults
@@ -136,18 +144,27 @@ private suspend fun syncNow() {
     // library, not just whatever's taken in the next minute.
     val since = if (lastSync > 0) lastSync else 0.0
 
-    val newMedia = fetchMediaSince(since.toLong())
-    log("syncNow: found ${newMedia.size} item(s) newer than $since")
+    // Videos are temporarily NOT auto-uploaded — readBytesAtPath() below loads a file
+    // entirely into one ByteArray, and a real-world video (a 212MB .MOV triggered this)
+    // is both a genuine OOM risk on its own and, separately, doomed to fail regardless:
+    // photos.sevis.store is fronted by a cloudflared tunnel, which caps request bodies
+    // well under photo-service's own 2GB server.servlet.multipart limit — the upload
+    // was failing with NSURLErrorDomain -1017 "cannot parse response" / connection
+    // reset, consistent with Cloudflare closing the connection mid-upload rather than a
+    // bug in this client. Re-enable once uploads are chunked/resumable or routed around
+    // the tunnel's size limit — don't just remove this comment and filter it back in
+    // without one of those.
+    val newMedia = fetchMediaSince(since.toLong()).filter { !it.isVideo }
+    log("syncNow: found ${newMedia.size} new image(s) (video auto-upload disabled)")
 
     val client = buildKtorClient()
     val photoApi = PhotoApi(API_BASE_URL, client)
 
     if (newMedia.isEmpty()) {
         runFaceScanBatch(photoApi)
-        return
+        return@withContext
     }
 
-    val videoApi = VideoApi(API_BASE_URL, client)
     var uploaded = 0
     var failed = 0
 
@@ -165,17 +182,11 @@ private suspend fun syncNow() {
             log("Skipping $filename — couldn't read bytes from $path")
             return@forEach
         }
-        val mimeType = if (item.isVideo) mimeTypeForFilename(filename, isVideo = true) else mimeTypeForFilename(filename, isVideo = false)
-        log("Uploading ${if (item.isVideo) "video" else "image"} $filename (${bytes.size} bytes, $mimeType)…")
-        if (item.isVideo) {
-            runCatching { videoApi.uploadVideo(bytes, filename, mimeType) }
-                .onSuccess { response -> uploaded++; log("Uploaded $filename -> video id=${response.id}") }
-                .onFailure { e -> failed++; log("Failed to upload $filename: ${e::class.simpleName}: ${e.message}") }
-        } else {
-            runCatching { photoApi.uploadImage(bytes, filename, mimeType) }
-                .onSuccess { response -> uploaded++; log("Uploaded $filename -> photo id=${response.id}") }
-                .onFailure { e -> failed++; log("Failed to upload $filename: ${e::class.simpleName}: ${e.message}") }
-        }
+        val mimeType = mimeTypeForFilename(filename, isVideo = false)
+        log("Uploading image $filename (${bytes.size} bytes, $mimeType)…")
+        runCatching { photoApi.uploadImage(bytes, filename, mimeType) }
+            .onSuccess { response -> uploaded++; log("Uploaded $filename -> photo id=${response.id}") }
+            .onFailure { e -> failed++; log("Failed to upload $filename: ${e::class.simpleName}: ${e.message}") }
     }
 
     defaults.setDouble(NSDate().timeIntervalSince1970, KEY_LAST_SYNC)
