@@ -48,7 +48,11 @@ class AutoUploadWorker(
         AppState.token = token
         AppState.folderPassword = folderPwd
 
-        val sinceEpoch = prefs.getLong(KEY_LAST_SYNC, System.currentTimeMillis() / 1000 - 60)
+        // 0L (not "now - 60s") the first time this ever runs — without a manual Upload
+        // screen as a fallback, this is now the *only* path anything already in the
+        // library gets to the server through, so the first sync has to catch the whole
+        // existing library, not just whatever's taken in the next minute.
+        val sinceEpoch = prefs.getLong(KEY_LAST_SYNC, 0L)
         val newImages = MediaStoreHelper.getImagesSince(applicationContext, sinceEpoch)
         val newVideos = MediaStoreHelper.getVideosSince(applicationContext, sinceEpoch)
 

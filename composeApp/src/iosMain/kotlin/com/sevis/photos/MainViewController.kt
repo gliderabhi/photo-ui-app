@@ -1,15 +1,14 @@
 package com.sevis.photos
 
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.window.ComposeUIViewController
-import com.sevis.photos.data.ImageFile
 import com.sevis.photos.data.PhotoApi
 import com.sevis.photos.data.VideoApi
-import com.sevis.photos.data.VideoFile
 import com.sevis.photos.screens.PeopleScreen
 import com.sevis.photos.screens.PersonPhotosScreen
 import kotlinx.coroutines.launch
@@ -27,11 +26,14 @@ fun MainViewController(): UIViewController {
     val videoApi = VideoApi(baseUrl = API_BASE_URL, client = buildKtorClient())
 
     return ComposeUIViewController {
-        var pickedImages by remember { mutableStateOf<List<ImageFile>>(emptyList()) }
-        var pickedVideos by remember { mutableStateOf<List<VideoFile>>(emptyList()) }
         var updateProgress by remember { mutableStateOf<Int?>(null) }
         var updateError by remember { mutableStateOf<String?>(null) }
         val scope = rememberCoroutineScope()
+
+        // The one *reliable* auto-upload trigger on iOS — see syncOnAppOpen()'s doc
+        // comment. Runs once per fresh ComposeUIViewController (i.e. once per app
+        // launch/session), not on every recomposition.
+        LaunchedEffect(Unit) { syncOnAppOpen() }
 
         App(
             api = api,
@@ -45,29 +47,7 @@ fun MainViewController(): UIViewController {
                 SettingsStore.setFolderPassword(pwd)
             },
             onFavoritesChange = { ids -> SettingsStore.setFavorites(ids) },
-            pickedImages = pickedImages,
-            pickedVideos = pickedVideos,
-            onPickMedia = {
-                scope.launch {
-                    val (images, videos) = pickMedia()
-                    pickedImages = images
-                    pickedVideos = videos
-                }
-            },
-            onClearPickedMedia = { pickedImages = emptyList(); pickedVideos = emptyList() },
-            uploadImage = { imageFile ->
-                runCatching {
-                    val bytes = readBytesAtPath(imageFile.uri) ?: error("Cannot read ${imageFile.uri}")
-                    api.uploadImage(bytes, imageFile.name, imageFile.mimeType)
-                }
-            },
             videoApi = videoApi,
-            uploadVideo = { videoFile ->
-                runCatching {
-                    val bytes = readBytesAtPath(videoFile.uri) ?: error("Cannot read ${videoFile.uri}")
-                    videoApi.uploadVideo(bytes, videoFile.name, videoFile.mimeType)
-                }
-            },
             onPlayVideo = { url, rawUrl -> presentVideoPlayer(url, rawUrl) },
             autoUploadEnabled = AppState.autoUploadEnabled,
             onAutoUploadToggle = { enabled -> scope.launch { setAutoUploadEnabled(enabled) } },

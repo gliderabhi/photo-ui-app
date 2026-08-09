@@ -37,12 +37,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sevis.photos.BackHandler
-import com.sevis.photos.data.ImageFile
 import com.sevis.photos.data.PhotoApi
-import com.sevis.photos.data.PhotoResponse
 import com.sevis.photos.data.VideoApi
-import com.sevis.photos.data.VideoFile
-import com.sevis.photos.data.VideoResponse
 import com.sevis.photos.tvFocusRing
 import com.sevis.photos.ui.GlassColors
 import com.sevis.photos.ui.GlassPageBackground
@@ -54,15 +50,20 @@ import org.jetbrains.compose.resources.painterResource
 /**
  * All destinations reachable from the shell. Gallery is home; every other pane —
  * regrouping the on-device library (Albums/People/By Place/By Date) as well as
- * cloud-side content (Upload/Videos/Favorites) — is reached from the FAB. The top
- * bar's overflow menu is reserved for account-level actions only (Lock Folder/
- * Settings/Logout), not content navigation.
+ * cloud-side content (Videos/Favorites) — is reached from the FAB. The top bar's
+ * overflow menu is reserved for account-level actions only (Lock Folder/Settings/
+ * Logout), not content navigation.
  *
  * There used to be a separate "Cloud Gallery" pane here (the same GalleryScreen
  * backing Favorites below, just unfiltered) — removed in favor of a single,
  * on-device-first Gallery: local photos load instantly and already-uploaded ones
  * get a small cloud badge (see photoGridItems' uploadedFilenames param on both
  * platforms), so there's no separate cloud timeline to keep in sync or explain.
+ *
+ * There was also a manual "Upload" pane (pick photos, tap upload) — removed in
+ * favor of auto-upload being the only path to the server, so there's one way
+ * things get backed up, not two that can drift out of sync with each other. The
+ * auto-upload on/off switch itself still lives in Settings (see SettingsScreen).
  */
 private sealed class AppPane {
     data object Gallery : AppPane()
@@ -70,7 +71,6 @@ private sealed class AppPane {
     data class AlbumPhotos(val bucketName: String) : AppPane()
     data object People : AppPane()
     data class PersonPhotos(val personId: Long, val displayName: String?) : AppPane()
-    data object Upload : AppPane()
     data object Videos : AppPane()
     data object Favorites : AppPane()
 }
@@ -90,13 +90,7 @@ private fun Modifier.zeroSizeLayout(): Modifier = this.layout { measurable, _ ->
 fun ShellScreen(
     api: PhotoApi,
     baseUrl: String,
-    pickedImages: List<ImageFile>,
-    pickedVideos: List<VideoFile>,
-    onPickMedia: () -> Unit,
-    onClearPickedMedia: () -> Unit,
-    uploadImage: suspend (ImageFile) -> Result<PhotoResponse>,
     videoApi: VideoApi,
-    uploadVideo: suspend (VideoFile) -> Result<VideoResponse>,
     onPlayVideo: (String, String?) -> Unit,
     autoUploadEnabled: Boolean,
     onAutoUploadToggle: (Boolean) -> Unit,
@@ -171,16 +165,6 @@ fun ShellScreen(
                     { id, name -> pane = AppPane.PersonPhotos(id, name) }
                 )
                 is AppPane.PersonPhotos -> localPersonPhotosContent(p.personId, p.displayName) { pane = AppPane.People }
-                AppPane.Upload -> UploadScreen(
-                    pickedImages = pickedImages,
-                    pickedVideos = pickedVideos,
-                    onPickMedia = onPickMedia,
-                    onClearPickedMedia = onClearPickedMedia,
-                    uploadImage = uploadImage,
-                    uploadVideo = uploadVideo,
-                    autoUploadEnabled = autoUploadEnabled,
-                    onAutoUploadToggle = onAutoUploadToggle
-                )
                 AppPane.Videos -> VideoListScreen(
                     videoApi = videoApi,
                     onPlayVideo = onPlayVideo
@@ -399,7 +383,6 @@ private fun GlassFab(
             val items = listOf(
                 FabMenuItem("Favorites", Icons.Filled.Favorite) { onNavigate(AppPane.Favorites) },
                 FabMenuItem("Videos", Icons.Filled.VideoLibrary) { onNavigate(AppPane.Videos) },
-                FabMenuItem("Upload", Icons.Filled.CloudUpload) { onNavigate(AppPane.Upload) },
                 FabMenuItem("People", Icons.Filled.Face) { onNavigate(AppPane.People) },
                 FabMenuItem("Albums", Icons.Filled.Folder) { onNavigate(AppPane.Albums) },
                 FabMenuItem("By Place", Icons.Filled.Place) { onSelectGrouping(Grouping.PLACE) },

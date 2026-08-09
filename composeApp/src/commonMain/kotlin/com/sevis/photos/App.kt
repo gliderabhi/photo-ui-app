@@ -32,7 +32,6 @@ object Routes {
     const val SHELL = "shell"
     const val GALLERY = "gallery"
     const val FAVORITES = "favorites"
-    const val UPLOAD = "upload"
     const val ALBUMS = "albums"
     const val ALBUM_DETAIL = "albums/{albumId}"
 
@@ -46,13 +45,7 @@ fun App(
     onTokenChange: (String?) -> Unit,
     onFolderPasswordChange: (String?) -> Unit,
     onFavoritesChange: (Set<Int>) -> Unit,
-    pickedImages: List<ImageFile>,
-    pickedVideos: List<VideoFile>,
-    onPickMedia: () -> Unit,
-    onClearPickedMedia: () -> Unit,
-    uploadImage: suspend (ImageFile) -> Result<PhotoResponse>,
     videoApi: VideoApi,
-    uploadVideo: suspend (VideoFile) -> Result<VideoResponse>,
     onPlayVideo: (String, String?) -> Unit,
     autoUploadEnabled: Boolean,
     onAutoUploadToggle: (Boolean) -> Unit,
@@ -140,13 +133,7 @@ fun App(
                 ShellScreen(
                     api = api,
                     baseUrl = baseUrl,
-                    pickedImages = pickedImages,
-                    pickedVideos = pickedVideos,
-                    onPickMedia = onPickMedia,
-                    onClearPickedMedia = onClearPickedMedia,
-                    uploadImage = uploadImage,
                     videoApi = videoApi,
-                    uploadVideo = uploadVideo,
                     onPlayVideo = onPlayVideo,
                     autoUploadEnabled = autoUploadEnabled,
                     onAutoUploadToggle = onAutoUploadToggle,

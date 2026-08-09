@@ -34,7 +34,9 @@ private val autoUploadScope = CoroutineScope(SupervisorJob() + Dispatchers.Defau
  * strong "runs roughly every 15 minutes" guarantee, iOS gives "runs sometime, maybe," by design
  * — Apple deliberately doesn't let third-party apps run arbitrary code in the background on a
  * fixed schedule, for battery/privacy reasons. The most reliable trigger in practice ends up
- * being simply opening the app, which also runs a sync (see MainViewController's LaunchedEffect).
+ * being simply opening the app — MainViewController calls syncOnAppOpen() for exactly that
+ * reason, since relying on BGTaskScheduler alone left auto-upload silently idle for weeks
+ * (nothing uploaded from 2026-07-04 to today, confirmed against the server's photo_db).
  */
 @OptIn(ExperimentalForeignApi::class)
 fun registerAutoUploadTask() {
@@ -79,6 +81,15 @@ suspend fun setAutoUploadEnabled(enabled: Boolean) {
     }
 }
 
+/** Runs a sync immediately, meant to be called once per app open/foreground (see
+ *  MainViewController) — the one *reliable* trigger auto-upload has on iOS, since
+ *  BGTaskScheduler alone is best-effort only (see registerAutoUploadTask's doc comment).
+ *  No-ops quietly if auto-upload isn't actually turned on or the app isn't logged in yet. */
+suspend fun syncOnAppOpen() {
+    if (!AppState.autoUploadEnabled) return
+    syncNow()
+}
+
 /** Uploads every local photo/video newer than the last sync, using each asset's *original*
  *  file (see LocalPhotoLibrary.exportOriginal) — same incremental approach as
  *  AutoUploadWorker.doWork() on Android, just PHPhotoLibrary instead of MediaStore. */
@@ -87,7 +98,11 @@ private suspend fun syncNow() {
 
     val defaults = NSUserDefaults.standardUserDefaults
     val lastSync = defaults.doubleForKey(KEY_LAST_SYNC)
-    val since = if (lastSync > 0) lastSync else NSDate().timeIntervalSince1970 - 60
+    // 0 (not "60 seconds ago") the first time this ever runs — without a manual Upload
+    // screen as a fallback, this is now the *only* path anything already in the library
+    // gets to the server through, so the first sync has to catch the whole existing
+    // library, not just whatever's taken in the next minute.
+    val since = if (lastSync > 0) lastSync else 0.0
 
     val newMedia = fetchMediaSince(since.toLong())
     if (newMedia.isEmpty()) return

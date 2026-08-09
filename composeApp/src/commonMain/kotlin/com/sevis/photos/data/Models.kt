@@ -84,34 +84,6 @@ data class AppVersionResponse(
 @Serializable
 data class FolderStatusResponse(val hasFolder: Boolean)
 
-/** A locally-picked image file, used in the upload queue. */
-data class ImageFile(
-    val uri: String,
-    val name: String,
-    val mimeType: String
-)
-
-enum class UploadStatus { PENDING, UPLOADING, DONE, ERROR }
-
-data class UploadItem(
-    val file: ImageFile,
-    val status: UploadStatus = UploadStatus.PENDING,
-    val errorMsg: String? = null
-)
-
-/** A locally-picked video file, used in the video upload queue. */
-data class VideoFile(
-    val uri: String,
-    val name: String,
-    val mimeType: String
-)
-
-data class VideoUploadItem(
-    val file: VideoFile,
-    val status: UploadStatus = UploadStatus.PENDING,
-    val errorMsg: String? = null
-)
-
 @Serializable
 data class VideoResponse(
     val id: String,

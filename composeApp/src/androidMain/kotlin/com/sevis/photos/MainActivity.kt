@@ -3,25 +3,20 @@ package com.sevis.photos
 import android.Manifest
 import android.content.Intent
 import android.content.SharedPreferences
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.provider.MediaStore
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.*
 import androidx.core.view.WindowCompat
 import androidx.media3.common.util.UnstableApi
 import com.sevis.photos.autoupload.AutoUploadScheduler
-import com.sevis.photos.data.ImageFile
 import com.sevis.photos.data.PhotoApi
 import com.sevis.photos.data.VideoApi
-import com.sevis.photos.data.VideoFile
 import io.ktor.client.*
 import io.ktor.client.engine.android.*
 import io.ktor.client.plugins.api.*
@@ -67,31 +62,9 @@ class MainActivity : ComponentActivity() {
         videoApi = VideoApi(baseUrl = BuildConfig.API_BASE_URL, client = buildKtorClient())
 
         setContent {
-            var pickedImages by remember { mutableStateOf<List<ImageFile>>(emptyList()) }
-            var pickedVideos by remember { mutableStateOf<List<VideoFile>>(emptyList()) }
             // Null = no update in progress; 0..100 = download percent.
             var updateProgress by remember { mutableStateOf<Int?>(null) }
             var updateError by remember { mutableStateOf<String?>(null) }
-
-            // Single picker for both photos and videos (mirrors the web app's unified
-            // upload page) — classify each returned URI by MIME type after the fact,
-            // since the system picker itself just returns a mixed list of URIs.
-            val mediaPicker = rememberLauncherForActivityResult(
-                ActivityResultContracts.PickMultipleVisualMedia()
-            ) { uris ->
-                val images = mutableListOf<ImageFile>()
-                val videos = mutableListOf<VideoFile>()
-                uris.forEach { uri ->
-                    val mimeType = contentResolver.getType(uri) ?: ""
-                    if (mimeType.startsWith("video/")) {
-                        readVideoFile(uri)?.let { videos += it }
-                    } else {
-                        readImageFile(uri)?.let { images += it }
-                    }
-                }
-                pickedImages = images
-                pickedVideos = videos
-            }
 
             // Permission launcher for READ_MEDIA_IMAGES / READ_EXTERNAL_STORAGE
             val readPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
@@ -112,6 +85,19 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+            // The one *reliable* auto-upload trigger, same reasoning as iOS's
+            // syncOnAppOpen() — WorkManager's periodic schedule is normally enough on its
+            // own, but re-arming it here too is cheap defensive insurance against
+            // anything that can silently drop it (e.g. a reinstall, which wipes both this
+            // app's WorkManager schedule *and* the auto_upload_enabled preference itself —
+            // see AutoUploadScheduler.schedule()'s KEEP policy, safe to call redundantly).
+            LaunchedEffect(Unit) {
+                if (AppState.autoUploadEnabled) {
+                    AutoUploadScheduler.schedule(applicationContext)
+                    AutoUploadScheduler.runOnce(applicationContext)
+                }
+            }
+
             App(
                 api = api,
                 baseUrl = BuildConfig.API_BASE_URL,
@@ -126,35 +112,7 @@ class MainActivity : ComponentActivity() {
                 onFavoritesChange = { ids ->
                     prefs.edit().putString("favorites", ids.joinToString(",")).apply()
                 },
-                pickedImages = pickedImages,
-                pickedVideos = pickedVideos,
-                onPickMedia = {
-                    pickedImages = emptyList()
-                    pickedVideos = emptyList()
-                    mediaPicker.launch(
-                        PickVisualMediaRequest(
-                            ActivityResultContracts.PickVisualMedia.ImageAndVideo
-                        )
-                    )
-                },
-                onClearPickedMedia = { pickedImages = emptyList(); pickedVideos = emptyList() },
-                uploadImage = { imageFile ->
-                    runCatching {
-                        val bytes = contentResolver.openInputStream(Uri.parse(imageFile.uri))
-                            ?.use { it.readBytes() }
-                            ?: error("Cannot read ${imageFile.uri}")
-                        api.uploadImage(bytes, imageFile.name, imageFile.mimeType)
-                    }
-                },
                 videoApi = videoApi,
-                uploadVideo = { videoFile ->
-                    runCatching {
-                        val bytes = contentResolver.openInputStream(Uri.parse(videoFile.uri))
-                            ?.use { it.readBytes() }
-                            ?: error("Cannot read ${videoFile.uri}")
-                        videoApi.uploadVideo(bytes, videoFile.name, videoFile.mimeType)
-                    }
-                },
                 onPlayVideo = { url, rawUrl ->
                     startActivity(
                         Intent(this, VideoPlayerActivity::class.java)
@@ -229,40 +187,6 @@ class MainActivity : ComponentActivity() {
                 versionName = BuildConfig.VERSION_NAME,
                 versionCode = BuildConfig.VERSION_CODE
             )
-        }
-    }
-
-    private fun readImageFile(uri: Uri): ImageFile? {
-        return try {
-            val cursor = contentResolver.query(
-                uri,
-                arrayOf(MediaStore.Images.Media.DISPLAY_NAME),
-                null, null, null
-            )
-            val name = cursor?.use {
-                if (it.moveToFirst()) it.getString(0) else uri.lastPathSegment ?: "image.jpg"
-            } ?: (uri.lastPathSegment ?: "image.jpg")
-            val mimeType = contentResolver.getType(uri) ?: "image/jpeg"
-            ImageFile(uri = uri.toString(), name = name, mimeType = mimeType)
-        } catch (e: Exception) {
-            null
-        }
-    }
-
-    private fun readVideoFile(uri: Uri): VideoFile? {
-        return try {
-            val cursor = contentResolver.query(
-                uri,
-                arrayOf(MediaStore.Video.Media.DISPLAY_NAME),
-                null, null, null
-            )
-            val name = cursor?.use {
-                if (it.moveToFirst()) it.getString(0) else uri.lastPathSegment ?: "video.mp4"
-            } ?: (uri.lastPathSegment ?: "video.mp4")
-            val mimeType = contentResolver.getType(uri) ?: "video/mp4"
-            VideoFile(uri = uri.toString(), name = name, mimeType = mimeType)
-        } catch (e: Exception) {
-            null
         }
     }
 
