@@ -286,7 +286,12 @@ fun GalleryScreen(
                                 scope.launch {
                                     runCatching { api.createAlbum(newAlbumName.trim()) }
                                         .onSuccess { album ->
-                                            api.addPhotosToAlbum(album.id, selectedIds.toList())
+                                            // Not wrapped in the outer runCatching above — that one only
+                                            // covers createAlbum(); this is a second, independent network
+                                            // call that needs its own guard, or a failure here (e.g. the
+                                            // network drops between the two calls) would propagate
+                                            // uncaught out of this coroutine.
+                                            runCatching { api.addPhotosToAlbum(album.id, selectedIds.toList()) }
                                             showAlbumPicker = false
                                             selectedIds = emptySet()
                                             bulkMode = false
